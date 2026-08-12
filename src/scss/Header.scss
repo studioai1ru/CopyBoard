@@ -1,6 +1,7 @@
 .workspace-header {
   position: relative;
   z-index: 10;
+  min-width: 0;
   flex: none;
   border-bottom: 1px solid var(--border-primary);
   background: color-mix(in srgb, var(--bg-primary) 94%, transparent);
@@ -8,10 +9,12 @@
 
 .workspace-header__primary {
   display: grid;
-  grid-template-columns: minmax(12rem, 0.7fr) minmax(18rem, 1.4fr) auto;
-  min-height: 66px;
+  min-width: 0;
+  grid-template-columns: auto minmax(8rem, 1fr) auto auto;
+  min-height: 62px;
   align-items: center;
-  gap: clamp(0.75rem, 2vw, 1.5rem);
+  gap: clamp(0.5rem, 1.5vw, 1rem);
+  padding-block: 0.55rem;
 }
 
 .workspace-heading {
@@ -88,7 +91,7 @@
 
 .workspace-header__actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .square-action {
@@ -113,40 +116,24 @@
   height: 19px;
 }
 
-.workspace-header__secondary {
-  display: flex;
-  min-height: 48px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding-bottom: 0.65rem;
-}
-
 .content-filters {
   display: flex;
   min-width: 0;
-  gap: 0.35rem;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.content-filters::-webkit-scrollbar {
-  display: none;
+  gap: 0.3rem;
 }
 
 .content-filter {
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  gap: 0.5rem;
+  position: relative;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
   flex: none;
   border: 1px solid transparent;
-  border-radius: 999px;
-  padding: 0.35rem 0.45rem 0.35rem 0.8rem;
+  border-radius: var(--radius-md);
+  padding: 0;
   background: transparent;
   color: var(--text-muted);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
 }
 
 .content-filter:hover {
@@ -160,17 +147,38 @@
   color: var(--text-primary);
 }
 
-.content-filter__count {
+.content-filter__icon {
   display: grid;
-  min-width: 24px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--filter-icon-bg);
+  color: var(--filter-icon-fg);
+}
+
+.content-filter__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.content-filter__count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: grid;
+  min-width: 19px;
+  height: 19px;
   place-items: center;
   border-radius: 999px;
-  padding-inline: 0.4rem;
+  padding-inline: 0.25rem;
+  border: 2px solid var(--bg-primary);
   background: var(--bg-elevated);
   color: var(--text-secondary);
   font-family: var(--font-family-mono);
-  font-size: 0.68rem;
+  font-size: 0.58rem;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
 }
 
 .content-filter[aria-pressed="true"] .content-filter__count {
@@ -178,74 +186,47 @@
   color: #06111d;
 }
 
-.clear-history-action {
-  display: inline-flex;
-  min-height: 36px;
-  align-items: center;
-  gap: 0.4rem;
-  flex: none;
-  border-radius: var(--radius-md);
-  padding: 0.45rem 0.7rem;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: var(--font-size-xs);
-}
-
-.clear-history-action:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--error) 14%, transparent);
-  color: var(--error);
-}
-
-.clear-history-action svg {
-  width: 17px;
-  height: 17px;
-}
-
 @media (max-width: 760px) {
   .workspace-header__primary {
-    grid-template-columns: 1fr auto;
-    padding-block: 0.75rem;
+    grid-template-columns: minmax(7.5rem, 1fr) auto auto;
+    gap: 0.45rem;
   }
 
   .workspace-heading {
     display: none;
   }
 
-  .history-search {
-    grid-column: 1;
+  .square-action,
+  .content-filter {
+    width: 38px;
+    height: 38px;
   }
 
-  .workspace-header__actions {
-    grid-column: 2;
+  .content-filter__icon {
+    width: 28px;
+    height: 28px;
   }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 560px) {
   .workspace-header__primary {
-    grid-template-columns: 1fr;
+    gap: 0.3rem;
+    padding-inline: 0.75rem;
   }
 
+  .content-filters,
   .workspace-header__actions {
-    position: absolute;
-    top: 0.75rem;
-    right: 1rem;
+    gap: 0.2rem;
+  }
+
+  .square-action,
+  .content-filter {
+    width: 36px;
+    height: 36px;
   }
 
   .history-search input {
-    padding-right: 6.25rem;
-  }
-
-  .workspace-header__secondary {
-    align-items: flex-start;
-  }
-
-  .clear-history-action span {
-    display: none;
-  }
-
-  .clear-history-action {
-    width: 36px;
-    justify-content: center;
-    padding: 0;
+    height: 38px;
+    padding-inline: 2.4rem 2.25rem;
   }
 }

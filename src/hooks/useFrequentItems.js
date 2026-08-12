@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createEntryId, favoriteLabel } from '../utils/clipboardUtils';
-import { detectFavoriteIcon, normalizeFavoriteIcon } from '../utils/favoriteIcons';
+import {
+  detectFavoriteIcon,
+  normalizeFavoriteDisplayMode,
+  normalizeFavoriteIcon,
+} from '../utils/favoriteIcons';
 import { desktop } from '../utils/desktop';
 
 export function useFrequentItems() {
@@ -31,7 +35,7 @@ export function useFrequentItems() {
     if (api?.favorites?.save) await api.favorites.save(nextItems);
   }, []);
 
-  const addItem = useCallback(async (label, content, icon) => {
+  const addItem = useCallback(async (label, content, icon, displayMode = 'icon-text') => {
     const trimmed = String(content || '').trim();
     if (!trimmed) return false;
     if (items.some((row) => row.content === trimmed)) return false;
@@ -42,6 +46,7 @@ export function useFrequentItems() {
         label: favoriteLabel(label, trimmed),
         content: trimmed,
         icon: normalizeFavoriteIcon(icon, trimmed),
+        displayMode: normalizeFavoriteDisplayMode(displayMode),
         createdAt: new Date().toISOString(),
       },
       ...items,
@@ -73,7 +78,7 @@ export function useFrequentItems() {
     return addItem('', clipboardItem.content, detectFavoriteIcon(clipboardItem.content));
   }, [addItem, items, persist]);
 
-  const updateItem = useCallback(async (id, label, content, icon) => {
+  const updateItem = useCallback(async (id, label, content, icon, displayMode = 'icon-text') => {
     const trimmed = String(content || '').trim();
     if (!trimmed) return false;
     await persist(
@@ -84,6 +89,7 @@ export function useFrequentItems() {
               label: favoriteLabel(label, trimmed),
               content: trimmed,
               icon: normalizeFavoriteIcon(icon, trimmed),
+              displayMode: normalizeFavoriteDisplayMode(displayMode),
               updatedAt: new Date().toISOString(),
             }
           : row,
@@ -94,6 +100,22 @@ export function useFrequentItems() {
 
   const deleteItem = useCallback(async (id) => {
     await persist(items.filter((row) => row.id !== id));
+  }, [items, persist]);
+
+  const reorderItem = useCallback(async (activeId, targetId = null) => {
+    const fromIndex = items.findIndex((row) => row.id === activeId);
+    if (fromIndex < 0) return false;
+
+    const targetIndex = targetId === null
+      ? items.length - 1
+      : items.findIndex((row) => row.id === targetId);
+    if (targetIndex < 0 || targetIndex === fromIndex) return false;
+
+    const nextItems = [...items];
+    const [movedItem] = nextItems.splice(fromIndex, 1);
+    nextItems.splice(targetIndex, 0, movedItem);
+    await persist(nextItems);
+    return true;
   }, [items, persist]);
 
   const hasContent = useCallback(
@@ -110,6 +132,7 @@ export function useFrequentItems() {
     removeByContent,
     updateItem,
     deleteItem,
+    reorderItem,
     hasContent,
   };
 }

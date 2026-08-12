@@ -13,6 +13,7 @@ import { desktop } from './utils/desktop';
 import { useSettings } from './hooks/useSettings';
 import { useClipboardHistory } from './hooks/useClipboardHistory';
 import { useFrequentItems } from './hooks/useFrequentItems';
+import { resolveFavoriteIcon } from './utils/favoriteIcons';
 import './scss/App.scss';
 
 window.addEventListener('contextmenu', (event) => event.preventDefault());
@@ -88,6 +89,7 @@ function App() {
     toggleFromClipboardItem,
     updateItem: updateFrequentItem,
     deleteItem: deleteFrequentItem,
+    reorderItem: reorderFrequentItem,
   } = useFrequentItems();
 
   const favoriteContents = useMemo(
@@ -141,6 +143,15 @@ function App() {
     });
   }, [clipboardHistory, filter, searchQuery]);
 
+  const filteredFrequentItems = useMemo(
+    () => frequentItems.filter((item) => {
+      const favoriteIcon = resolveFavoriteIcon(item);
+      const favoriteType = ['image', 'code'].includes(favoriteIcon) ? favoriteIcon : 'text';
+      return filter === 'all' || favoriteType === filter;
+    }),
+    [filter, frequentItems],
+  );
+
   if (settingsLoaded && bootLanguageRef.current === null) {
     bootLanguageRef.current = language;
   }
@@ -152,7 +163,6 @@ function App() {
         <Header
           filter={filter}
           setFilter={setFilter}
-          clearHistory={clearHistory}
           totalItems={clipboardHistory.length}
           typeCounts={typeCounts}
           searchQuery={searchQuery}
@@ -161,6 +171,14 @@ function App() {
           setViewMode={setViewMode}
           onOpenSettings={() => setShowSettings(true)}
           searchInputRef={searchInputRef}
+        />
+
+        <FrequentPanel
+          items={filteredFrequentItems}
+          onCopy={copyToClipboard}
+          onEdit={setEditingFavorite}
+          onDelete={deleteFrequentItem}
+          onReorder={reorderFrequentItem}
         />
 
         <main className="main-content">
@@ -181,13 +199,6 @@ function App() {
             />
           )}
         </main>
-
-        <FrequentPanel
-          items={frequentItems}
-          onCopy={copyToClipboard}
-          onEdit={setEditingFavorite}
-          onDelete={deleteFrequentItem}
-        />
 
         {editingEntry && (
           <EditModal

@@ -11,8 +11,14 @@
 
 .clipboard-board--grid .clipboard-board__entries {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--clipboard-grid-columns, 3), minmax(0, 1fr));
+  grid-auto-rows: 16.5rem;
   gap: 1rem;
+}
+
+.clipboard-board--grid .clipboard-board__slot {
+  display: flex;
+  min-width: 0;
 }
 
 .clipboard-board--list .clipboard-board__entries {
@@ -79,16 +85,4 @@
   color: var(--text-muted);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
-}
-
-@media (max-width: 1000px) {
-  .clipboard-board--grid .clipboard-board__entries {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 620px) {
-  .clipboard-board--grid .clipboard-board__entries {
-    grid-template-columns: 1fr;
-  }
 }

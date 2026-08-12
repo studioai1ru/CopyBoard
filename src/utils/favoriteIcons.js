@@ -4,6 +4,12 @@ import { getTypeIconMeta, TYPE_ICON_META } from './typeIconMeta';
 /** Small set of favorite chip icons (content stays text/image; icon is metadata). */
 export const FAVORITE_ICON_IDS = Object.keys(TYPE_ICON_META);
 
+export const FAVORITE_DISPLAY_MODES = ['icon-text', 'text', 'icon'];
+
+export function normalizeFavoriteDisplayMode(mode) {
+  return FAVORITE_DISPLAY_MODES.includes(mode) ? mode : 'icon-text';
+}
+
 /** @deprecated use getTypeIconMeta — kept for call-site compatibility */
 export const FAVORITE_ICON_META = Object.fromEntries(
   FAVORITE_ICON_IDS.map((id) => {

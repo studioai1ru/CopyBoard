@@ -54,6 +54,12 @@ export const ru = {
       phone: 'Телефон',
       url: 'Ссылка',
     },
+    display: {
+      label: 'Отображение в избранном',
+      iconText: 'Символ + текст',
+      textOnly: 'Только текст',
+      iconOnly: 'Только символ',
+    },
   },
 
   item: {

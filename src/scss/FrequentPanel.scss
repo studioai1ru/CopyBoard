@@ -1,15 +1,28 @@
 .frequent-panel {
+  min-width: 0;
   flex-shrink: 0;
   padding: var(--spacing-sm) var(--spacing-lg);
-  border-top: 1px solid var(--border-primary);
-  background: linear-gradient(0deg, rgba(56, 189, 248, 0.05), transparent);
+  border-bottom: 1px solid var(--border-primary);
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.05), transparent);
 
   &__list {
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  &__list::-webkit-scrollbar {
+    display: none;
+  }
+
+  &__track {
     display: flex;
+    width: 100%;
+    min-width: 100%;
     flex-wrap: wrap;
+    align-content: flex-start;
     gap: var(--spacing-xs);
-    max-height: 72px;
-    overflow-y: auto;
   }
 }
 
@@ -17,13 +30,16 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  min-width: 0;
-  max-width: 200px;
+  min-width: 36px;
+  width: max-content;
+  max-width: 250px;
+  flex: none;
+  height: 36px;
   padding: 0.35rem 0.65rem;
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
   background: var(--bg-secondary);
-  cursor: pointer;
+  cursor: grab;
   text-align: left;
   transition: border-color var(--transition-fast), background var(--transition-fast);
 
@@ -37,6 +53,16 @@
     background: rgba(34, 197, 94, 0.16);
   }
 
+  &.is-dragging {
+    opacity: 0.45;
+    cursor: grabbing;
+  }
+
+  &.is-drag-over {
+    border-color: var(--accent-primary);
+    box-shadow: inset 3px 0 0 var(--accent-primary);
+  }
+
   &__label {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
@@ -46,6 +72,15 @@
     text-overflow: ellipsis;
     max-width: 100%;
     min-width: 0;
+  }
+
+  &--display-icon {
+    width: 36px;
+    padding-inline: 0.4rem;
+  }
+
+  &--display-text {
+    padding-inline: 0.7rem;
   }
 }
 

@@ -2,11 +2,13 @@ import { useMemo } from 'react';
 import {
   IoCloseOutline,
   IoGridOutline,
+  IoLayersOutline,
   IoListOutline,
   IoSearchOutline,
   IoSettingsOutline,
 } from 'react-icons/io5';
 import { useLanguage } from '../utils/i18n';
+import { getTypeIconMeta } from '../utils/typeIconMeta';
 import '../scss/Header.scss';
 
 const FILTERS = ['all', 'text', 'image', 'code'];
@@ -14,7 +16,6 @@ const FILTERS = ['all', 'text', 'image', 'code'];
 const Header = ({
   filter,
   setFilter,
-  clearHistory,
   totalItems,
   typeCounts = { text: 0, image: 0, code: 0 },
   searchQuery,
@@ -26,11 +27,18 @@ const Header = ({
 }) => {
   const { t } = useLanguage();
 
-  const filters = useMemo(() => FILTERS.map((value) => ({
-    value,
-    label: t(`filter.${value === 'image' ? 'images' : value}`),
-    count: value === 'all' ? totalItems : (typeCounts[value] || 0),
-  })), [t, totalItems, typeCounts]);
+  const filters = useMemo(() => FILTERS.map((value) => {
+    const typeMeta = value === 'all'
+      ? { Icon: IoLayersOutline, bg: 'var(--accent-muted)', fg: 'var(--accent-primary)' }
+      : getTypeIconMeta(value);
+
+    return {
+      value,
+      label: t(`filter.${value === 'image' ? 'images' : value}`),
+      count: value === 'all' ? totalItems : (typeCounts[value] || 0),
+      ...typeMeta,
+    };
+  }), [t, totalItems, typeCounts]);
 
   const nextViewLabel = viewMode === 'list' ? t('header.viewGrid') : t('header.viewList');
 
@@ -67,6 +75,34 @@ const Header = ({
           )}
         </label>
 
+        <nav className="content-filters" aria-label={t('header.filter')}>
+          {filters.map((option) => {
+            const FilterIcon = option.Icon;
+            const accessibleLabel = `${option.label}: ${option.count}`;
+
+            return (
+              <button
+                type="button"
+                key={option.value}
+                className="content-filter"
+                aria-label={accessibleLabel}
+                aria-pressed={filter === option.value}
+                title={accessibleLabel}
+                onClick={() => setFilter(option.value)}
+              >
+                <span
+                  className="content-filter__icon"
+                  style={{ '--filter-icon-bg': option.bg, '--filter-icon-fg': option.fg }}
+                  aria-hidden="true"
+                >
+                  <FilterIcon />
+                </span>
+                <span className="content-filter__count" aria-hidden="true">{option.count}</span>
+              </button>
+            );
+          })}
+        </nav>
+
         <div className="workspace-header__actions">
           <button
             type="button"
@@ -87,33 +123,6 @@ const Header = ({
             <IoSettingsOutline aria-hidden="true" />
           </button>
         </div>
-      </div>
-
-      <div className="workspace-header__secondary container">
-        <nav className="content-filters" aria-label={t('header.filter')}>
-          {filters.map((option) => (
-            <button
-              type="button"
-              key={option.value}
-              className="content-filter"
-              aria-pressed={filter === option.value}
-              onClick={() => setFilter(option.value)}
-            >
-              <span>{option.label}</span>
-              <span className="content-filter__count">{option.count}</span>
-            </button>
-          ))}
-        </nav>
-
-        <button
-          type="button"
-          className="clear-history-action"
-          onClick={clearHistory}
-          disabled={totalItems === 0}
-        >
-          <IoCloseOutline aria-hidden="true" />
-          <span>{t('header.clearAll')}</span>
-        </button>
       </div>
     </header>
   );

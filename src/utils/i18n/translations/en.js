@@ -54,6 +54,12 @@ export const en = {
       phone: 'Phone',
       url: 'Link',
     },
+    display: {
+      label: 'Favorite display',
+      iconText: 'Icon + text',
+      textOnly: 'Text only',
+      iconOnly: 'Icon only',
+    },
   },
 
   item: {

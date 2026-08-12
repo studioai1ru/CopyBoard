@@ -52,11 +52,16 @@ waitForServer()
       ['electron', '.'],
       {
         cwd: rootDir,
-        stdio: 'inherit',
+        stdio: ['inherit', 'pipe', 'pipe'],
         env: { ...process.env, NODE_ENV: 'development', VITE_DEV_SERVER_URL: devServerUrl },
         shell: process.platform === 'win32',
       },
     );
+
+    electron.stdout.setEncoding('utf8');
+    electron.stderr.setEncoding('utf8');
+    electron.stdout.on('data', (chunk) => process.stdout.write(chunk));
+    electron.stderr.on('data', (chunk) => process.stderr.write(chunk));
 
     electron.on('exit', (code) => {
       vite.kill();

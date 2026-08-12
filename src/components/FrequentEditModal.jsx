@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { FiType } from 'react-icons/fi';
 import { useLanguage } from '../utils/i18n';
 import ImagePreviewModal from './ImagePreviewModal';
 import FavoriteTypeIcon from './FavoriteTypeIcon';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import {
+  normalizeFavoriteDisplayMode,
   resolveFavoriteIcon,
   selectableFavoriteIcons,
 } from '../utils/favoriteIcons';
@@ -14,6 +16,7 @@ const FrequentEditModal = ({ item, onSave, onClose }) => {
   const [label, setLabel] = useState('');
   const [content, setContent] = useState('');
   const [icon, setIcon] = useState('text');
+  const [displayMode, setDisplayMode] = useState('icon-text');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const pickerRef = useRef(null);
@@ -23,6 +26,7 @@ const FrequentEditModal = ({ item, onSave, onClose }) => {
     setLabel(item.label || '');
     setContent(item.content || '');
     setIcon(resolveFavoriteIcon(item));
+    setDisplayMode(normalizeFavoriteDisplayMode(item.displayMode));
     setPreviewOpen(false);
     setIconPickerOpen(false);
   }, [item]);
@@ -58,7 +62,13 @@ const FrequentEditModal = ({ item, onSave, onClose }) => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const ok = await onSave(item.id, label, isImage ? item.content : content, icon);
+    const ok = await onSave(
+      item.id,
+      label,
+      isImage ? item.content : content,
+      icon,
+      displayMode,
+    );
     if (ok) onClose();
   };
 
@@ -115,40 +125,80 @@ const FrequentEditModal = ({ item, onSave, onClose }) => {
             </div>
 
             <div className="frequent-modal__actions">
-              <div className="frequent-modal__icon-picker" ref={pickerRef}>
-                <button
-                  type="button"
-                  className="frequent-modal__icon-trigger"
-                  onClick={() => setIconPickerOpen((open) => !open)}
-                  aria-label={t('frequent.icons.choose')}
-                  aria-expanded={iconPickerOpen}
-                  title={t(`frequent.icons.${icon}`)}
-                  disabled={iconChoices.length <= 1}
-                >
-                  <FavoriteTypeIcon icon={icon} content={bodyForIcon} size={14} />
-                </button>
+              <div className="frequent-modal__display-controls">
+                <div className="frequent-modal__icon-picker" ref={pickerRef}>
+                  <button
+                    type="button"
+                    className="frequent-modal__icon-trigger"
+                    onClick={() => setIconPickerOpen((open) => !open)}
+                    aria-label={t('frequent.icons.choose')}
+                    aria-expanded={iconPickerOpen}
+                    title={t(`frequent.icons.${icon}`)}
+                    disabled={iconChoices.length <= 1}
+                  >
+                    <FavoriteTypeIcon icon={icon} content={bodyForIcon} size={14} />
+                  </button>
 
-                {iconPickerOpen && (
-                  <div className="frequent-modal__icon-menu" role="listbox" aria-label={t('frequent.icons.choose')}>
-                    {iconChoices.map((id) => (
-                      <button
-                        key={id}
-                        type="button"
-                        role="option"
-                        aria-selected={icon === id}
-                        className={`frequent-modal__icon-option ${icon === id ? 'is-active' : ''}`}
-                        title={t(`frequent.icons.${id}`)}
-                        onClick={() => {
-                          setIcon(id);
-                          setIconPickerOpen(false);
-                        }}
-                      >
-                        <FavoriteTypeIcon icon={id} size={14} />
-                        <span>{t(`frequent.icons.${id}`)}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                  {iconPickerOpen && (
+                    <div className="frequent-modal__icon-menu" role="listbox" aria-label={t('frequent.icons.choose')}>
+                      {iconChoices.map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          role="option"
+                          aria-selected={icon === id}
+                          className={`frequent-modal__icon-option ${icon === id ? 'is-active' : ''}`}
+                          title={t(`frequent.icons.${id}`)}
+                          onClick={() => {
+                            setIcon(id);
+                            setIconPickerOpen(false);
+                          }}
+                        >
+                          <FavoriteTypeIcon icon={id} size={14} />
+                          <span>{t(`frequent.icons.${id}`)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  className="frequent-modal__display-mode"
+                  role="group"
+                  aria-label={t('frequent.display.label')}
+                >
+                  <button
+                    type="button"
+                    className="frequent-modal__display-option frequent-modal__display-option--both"
+                    aria-pressed={displayMode === 'icon-text'}
+                    aria-label={t('frequent.display.iconText')}
+                    title={t('frequent.display.iconText')}
+                    onClick={() => setDisplayMode('icon-text')}
+                  >
+                    <FavoriteTypeIcon icon={icon} content={bodyForIcon} size={11} />
+                    <FiType aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="frequent-modal__display-option"
+                    aria-pressed={displayMode === 'text'}
+                    aria-label={t('frequent.display.textOnly')}
+                    title={t('frequent.display.textOnly')}
+                    onClick={() => setDisplayMode('text')}
+                  >
+                    <FiType aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="frequent-modal__display-option"
+                    aria-pressed={displayMode === 'icon'}
+                    aria-label={t('frequent.display.iconOnly')}
+                    title={t('frequent.display.iconOnly')}
+                    onClick={() => setDisplayMode('icon')}
+                  >
+                    <FavoriteTypeIcon icon={icon} content={bodyForIcon} size={11} />
+                  </button>
+                </div>
               </div>
 
               <div className="frequent-modal__action-btns">

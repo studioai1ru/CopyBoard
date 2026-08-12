@@ -25,6 +25,7 @@ const ClipboardItem = ({
   const typeLabel = t(`item.${type}`);
   const ordinal = index + 1;
   const showActionText = viewMode === 'grid';
+  const actionCount = type === 'image' ? 3 : 4;
 
   const actionName = (key) => `${t(key)} · ${typeLabel} ${ordinal}`;
 
@@ -78,7 +79,7 @@ const ClipboardItem = ({
 
       <div className="clip-card__preview">{preview}</div>
 
-      <footer className="clip-card__actions">
+      <footer className="clip-card__actions" data-action-count={actionCount}>
         <button
           type="button"
           className={copied ? 'is-success' : ''}
@@ -88,7 +89,7 @@ const ClipboardItem = ({
           title={copied ? t('item.copied') : t('item.copy')}
         >
           {copied ? <FiCheck aria-hidden="true" /> : <FiCopy aria-hidden="true" />}
-          {showActionText && <span>{copied ? t('item.copied') : t('item.copy')}</span>}
+          {showActionText && <span className="clip-card__action-label">{copied ? t('item.copied') : t('item.copy')}</span>}
         </button>
 
         {type !== 'image' && (
@@ -99,7 +100,7 @@ const ClipboardItem = ({
             title={t('item.edit')}
           >
             <FiEdit2 aria-hidden="true" />
-            {showActionText && <span>{t('item.edit')}</span>}
+            {showActionText && <span className="clip-card__action-label">{t('item.edit')}</span>}
           </button>
         )}
 
@@ -112,7 +113,7 @@ const ClipboardItem = ({
           title={isFavorite ? t('item.removeFavorite') : t('item.addFavorite')}
         >
           <FiStar aria-hidden="true" fill={isFavorite ? 'currentColor' : 'none'} />
-          {showActionText && <span>{isFavorite ? t('item.inFavorites') : t('item.addFavorite')}</span>}
+          {showActionText && <span className="clip-card__action-label">{isFavorite ? t('item.inFavorites') : t('item.addFavorite')}</span>}
         </button>
 
         <button
@@ -123,7 +124,7 @@ const ClipboardItem = ({
           title={t('item.delete')}
         >
           <FiTrash2 aria-hidden="true" />
-          {showActionText && <span>{t('item.delete')}</span>}
+          {showActionText && <span className="clip-card__action-label">{t('item.delete')}</span>}
         </button>
       </footer>
 

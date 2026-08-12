@@ -28,7 +28,7 @@ const __dirname = path.dirname(__filename);
 const APP_NAME = 'CopyBoard';
 const WINDOW_WIDTH = 820;
 const WINDOW_HEIGHT = 620;
-const WINDOW_MIN_W = 660;
+const WINDOW_MIN_W = 520;
 const WINDOW_MIN_H = 500;
 
 const TRAY_COPY = {

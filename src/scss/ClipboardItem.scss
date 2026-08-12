@@ -4,11 +4,18 @@
   min-width: 0;
   min-height: 210px;
   flex-direction: column;
+  container: clip-card / inline-size;
   overflow: hidden;
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
   background: linear-gradient(145deg, var(--bg-secondary), color-mix(in srgb, var(--bg-secondary) 82%, var(--entry-accent) 18%));
   box-shadow: var(--shadow-sm);
+}
+
+.clip-card--grid {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 .clip-card::before {
@@ -133,13 +140,21 @@
   min-height: 40px;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  flex: 1;
-  padding: 0.55rem 0.65rem;
+  gap: 0.3rem;
+  flex: 1 1 auto;
+  overflow: hidden;
+  padding: 0.55rem 0.35rem;
   background: var(--bg-secondary);
   color: var(--text-muted);
   font-size: 0.72rem;
   font-weight: var(--font-weight-medium);
+}
+
+.clip-card__action-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 
 .clip-card__actions button:hover:not(:disabled) {
@@ -164,6 +179,26 @@
   width: 15px;
   height: 15px;
   flex: none;
+}
+
+@container clip-card (max-width: 375px) {
+  .clip-card__actions[data-action-count="4"] .clip-card__action-label {
+    display: none;
+  }
+
+  .clip-card__actions[data-action-count="4"] button {
+    padding-inline: 0.4rem;
+  }
+}
+
+@container clip-card (max-width: 340px) {
+  .clip-card__actions[data-action-count="3"] .clip-card__action-label {
+    display: none;
+  }
+
+  .clip-card__actions[data-action-count="3"] button {
+    padding-inline: 0.4rem;
+  }
 }
 
 .clip-card--list {
