@@ -90,7 +90,21 @@ jobs:
           fi
 
       - name: Build installer
-        run: npm run ${{ matrix.script }}
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if npm run "${{ matrix.script }}"; then
+              exit 0
+            fi
+
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "Installer build failed after ${attempt} attempts."
+              exit 1
+            fi
+
+            echo "Installer build attempt ${attempt} failed; retrying in 10 seconds."
+            sleep 10
+          done
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v7.0.1
