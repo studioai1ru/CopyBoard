@@ -12,8 +12,8 @@
     "build": "vite build",
     "dist": "npm run build && electron-builder",
     "dist:linux": "npm run build && electron-builder --linux",
-    "dist:win": "npm run build && electron-builder --win --x64",
-    "dist:mac": "npm run build && electron-builder --mac --universal",
+    "dist:win": "npm run build && electron-builder --win --x64 --publish never",
+    "dist:mac": "npm run build && electron-builder --mac --universal --publish never",
     "lint": "eslint .",
     "preview": "vite preview"
   },

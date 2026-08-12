@@ -62,17 +62,35 @@ jobs:
       - name: Run lint checks
         run: npm run lint
 
+      - name: Configure optional code signing
+        shell: bash
+        env:
+          BUILD_PLATFORM: ${{ matrix.label }}
+          MAC_CERTIFICATE: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          MAC_APPLE_ID: ${{ secrets.APPLE_ID }}
+          MAC_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          MAC_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WIN_CSC_LINK }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          if [[ "$BUILD_PLATFORM" == "macOS" ]]; then
+            if [[ -n "$MAC_CERTIFICATE" ]]; then
+              echo "CSC_LINK=$MAC_CERTIFICATE" >> "$GITHUB_ENV"
+              echo "CSC_KEY_PASSWORD=$MAC_CERTIFICATE_PASSWORD" >> "$GITHUB_ENV"
+              echo "APPLE_ID=$MAC_APPLE_ID" >> "$GITHUB_ENV"
+              echo "APPLE_APP_SPECIFIC_PASSWORD=$MAC_APP_PASSWORD" >> "$GITHUB_ENV"
+              echo "APPLE_TEAM_ID=$MAC_TEAM_ID" >> "$GITHUB_ENV"
+            else
+              echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+            fi
+          elif [[ -n "$WINDOWS_CERTIFICATE" ]]; then
+            echo "WIN_CSC_LINK=$WINDOWS_CERTIFICATE" >> "$GITHUB_ENV"
+            echo "WIN_CSC_KEY_PASSWORD=$WINDOWS_CERTIFICATE_PASSWORD" >> "$GITHUB_ENV"
+          fi
+
       - name: Build installer
         run: npm run ${{ matrix.script }}
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v7.0.1
