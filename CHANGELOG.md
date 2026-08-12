@@ -6,7 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-## [1.0.1] - 2026-08-12
+### Fixed
+
+- Changelog release dates now use the local calendar date instead of UTC.
+
+## [1.0.1] - 2026-08-13
 
 ### Added
 

@@ -29,7 +29,12 @@ if (!/^\s*-\s+\S/m.test(unreleasedBody)) {
   throw new Error('The Unreleased section has no changelog entries.');
 }
 
-const releaseDate = new Date().toISOString().slice(0, 10);
+const releaseMoment = new Date();
+const releaseDate = [
+  releaseMoment.getFullYear(),
+  String(releaseMoment.getMonth() + 1).padStart(2, '0'),
+  String(releaseMoment.getDate()).padStart(2, '0'),
+].join('-');
 const prefix = changelog.slice(0, bodyStart);
 const previousReleases = changelog.slice(nextReleaseStart).trimStart();
 const updatedChangelog = `${prefix}\n\n## [${packageMetadata.version}] - ${releaseDate}\n\n${unreleasedBody}\n\n${previousReleases.trimEnd()}\n`;
