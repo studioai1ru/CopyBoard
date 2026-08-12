@@ -15,7 +15,8 @@
     "dist:win": "npm run build && electron-builder --win --x64 --publish never",
     "dist:mac": "npm run build && electron-builder --mac --universal --publish never",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "version": "node scripts/update-changelog.mjs && git add CHANGELOG.md"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -54,7 +55,7 @@
     "win": {
       "target": "nsis",
       "icon": "public/images/CopyBoard_Logo.png",
-      "artifactName": "${productName}-${version}-Windows-${arch}-Setup.${ext}"
+      "artifactName": "${productName}-Windows-${arch}-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -66,7 +67,7 @@
       "target": "dmg",
       "icon": "public/images/CopyBoard_Logo.png",
       "category": "public.app-category.productivity",
-      "artifactName": "${productName}-${version}-macOS-${arch}.${ext}"
+      "artifactName": "${productName}-macOS-${arch}.${ext}"
     },
     "linux": {
       "target": "AppImage",
