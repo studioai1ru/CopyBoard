@@ -13,4 +13,4 @@ command = "npm run dev"
 [[actions]]
 name = "Release Patch"
 icon = "tool"
-command = "npm version patch && git push origin main --follow-tags"
+command = "npm version patch; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; git push origin main --follow-tags"

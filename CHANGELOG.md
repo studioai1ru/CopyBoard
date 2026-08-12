@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - Changelog release dates now use the local calendar date instead of UTC.
+- The Codex `Release Patch` action now works in Windows PowerShell 5.1.
 
 ## [1.0.1] - 2026-08-13
 
