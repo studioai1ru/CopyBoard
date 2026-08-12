@@ -1,0 +1,3 @@
+# Treat packaged Electron artifacts as binary files when they are intentionally added.
+*.asar binary
+*.exe binary

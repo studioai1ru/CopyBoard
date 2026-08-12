@@ -1,0 +1,62 @@
+// .title-bar is 28px and sits above overlays — keep close just under it
+$preview-close-top: 30px; // 28px title bar + 2px gap
+
+.image-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-md);
+  background-color: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(4px);
+
+  &__content {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-width: min(96vw, 1200px);
+    max-height: calc(100vh - 2 * var(--spacing-md));
+  }
+
+  img {
+    display: block;
+    max-width: min(96vw, 1200px);
+    max-height: calc(100vh - 2 * var(--spacing-md));
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    background: var(--bg-secondary);
+  }
+
+  &__close {
+    position: absolute;
+    top: $preview-close-top;
+    right: var(--spacing-md);
+    z-index: 2;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: var(--shadow-md);
+
+    &:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--error);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent-primary);
+      outline-offset: 2px;
+    }
+  }
+}

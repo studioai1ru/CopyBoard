@@ -1,0 +1,35 @@
+.app {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% -20%, var(--accent-muted), transparent 34rem),
+    var(--bg-primary);
+}
+
+.main-content {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.boot-spinner-wrap {
+  display: grid;
+  min-height: 50vh;
+  place-items: center;
+}
+
+.boot-spinner {
+  width: 42px;
+  height: 42px;
+  border: 3px solid var(--border-primary);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: boot-spin 700ms linear infinite;
+}
+
+@keyframes boot-spin {
+  to { transform: rotate(1turn); }
+}

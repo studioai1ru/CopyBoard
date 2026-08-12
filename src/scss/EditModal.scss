@@ -1,0 +1,86 @@
+.editor-dialog {
+  width: min(760px, calc(100vw - 2rem));
+  max-height: calc(100vh - 3rem);
+  overflow: visible;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.editor-dialog::backdrop {
+  background: rgba(3, 9, 18, 0.68);
+  backdrop-filter: blur(5px);
+}
+
+.editor-dialog__surface {
+  display: grid;
+  max-height: calc(100vh - 3rem);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-xl);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-xl);
+}
+
+.editor-dialog__header {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-primary);
+  padding: 0.75rem 0.85rem 0.75rem 1.25rem;
+}
+
+.editor-dialog__header h2 {
+  font-size: var(--font-size-lg);
+  letter-spacing: -0.02em;
+}
+
+.editor-dialog__content {
+  min-height: 0;
+  padding: 1.25rem;
+}
+
+.editor-dialog__content textarea {
+  display: block;
+  width: 100%;
+  min-height: min(48vh, 24rem);
+  padding: 1rem;
+  background: var(--bg-primary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+}
+
+.editor-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--border-primary);
+  padding: 0.85rem 1.25rem;
+  background: color-mix(in srgb, var(--bg-tertiary) 45%, var(--bg-secondary));
+}
+
+.editor-dialog__hint {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.editor-dialog__actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+@media (max-width: 520px) {
+  .editor-dialog__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .editor-dialog__actions > * {
+    flex: 1;
+  }
+}

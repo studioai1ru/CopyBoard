@@ -1,0 +1,58 @@
+.window-chrome {
+  display: flex;
+  height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  border-bottom: 1px solid var(--border-primary);
+  background: color-mix(in srgb, var(--bg-primary) 92%, transparent);
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.window-chrome__identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.45rem;
+  padding-left: 0.65rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: var(--font-weight-semibold);
+}
+
+.window-chrome__identity img {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.window-chrome__controls {
+  display: flex;
+  align-self: stretch;
+  -webkit-app-region: no-drag;
+}
+
+.window-chrome__controls button {
+  display: grid;
+  width: 44px;
+  place-items: center;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.window-chrome__controls button:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.window-chrome__controls .window-chrome__close:hover {
+  background: #c42b3a;
+  color: #fff;
+}
+
+.window-chrome__controls svg {
+  width: 13px;
+  height: 13px;
+}

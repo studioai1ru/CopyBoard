@@ -1,0 +1,293 @@
+// Keep clear of custom title bar (.title-bar height: 28px)
+$modal-titlebar-offset: 28px;
+
+.favorite-type-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+
+.frequent-modal-overlay {
+  position: fixed;
+  top: $modal-titlebar-offset;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(15, 23, 42, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+  padding: var(--spacing-lg);
+}
+
+.frequent-modal {
+  width: min(480px, 100%);
+  max-height: calc(100vh - #{$modal-titlebar-offset} - 2 * var(--spacing-lg));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+
+  &--edit {
+    width: min(420px, 100%);
+  }
+
+  &--image {
+    width: min(520px, 100%);
+  }
+
+  &__field-label {
+    display: block;
+    flex-shrink: 0;
+    margin-bottom: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+  }
+
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+
+    label {
+      display: grid;
+      gap: var(--spacing-xs);
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary);
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--border-primary);
+      border-radius: var(--radius-sm);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      padding: 0.65rem 0.75rem;
+      font: inherit;
+    }
+
+    input {
+      flex-shrink: 0;
+    }
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  &__content-field {
+    flex: 1;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+
+    textarea {
+      min-height: 6rem;
+      height: 100%;
+      max-height: none;
+      resize: none;
+      overflow: auto;
+    }
+  }
+
+  &__image-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    min-height: 0;
+    flex: 1;
+  }
+
+  &__image-preview {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    flex: 1;
+    min-height: 96px;
+    max-height: 100%;
+    padding: 0;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    overflow: hidden;
+    cursor: zoom-in;
+
+    img {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      pointer-events: none;
+    }
+
+    &:hover {
+      border-color: var(--accent-primary);
+
+      .frequent-modal__image-hint {
+        opacity: 1;
+      }
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent-primary);
+      outline-offset: 2px;
+    }
+  }
+
+  &__image-hint {
+    position: absolute;
+    left: 50%;
+    bottom: 10px;
+    transform: translateX(-50%);
+    padding: 0.25rem 0.6rem;
+    border-radius: var(--radius-sm);
+    background: rgba(15, 23, 42, 0.72);
+    color: #f8fafc;
+    font-size: var(--font-size-xs);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+    flex-shrink: 0;
+    padding-top: var(--spacing-xs);
+  }
+
+  &__action-btns {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    margin-left: auto;
+  }
+
+  &__icon-picker {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  &__icon-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    cursor: pointer;
+
+    .favorite-type-icon {
+      width: 22px;
+      height: 22px;
+    }
+
+    &:hover:not(:disabled) {
+      border-color: var(--accent-primary);
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.85;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent-primary);
+      outline-offset: 2px;
+    }
+  }
+
+  &__icon-menu {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + 6px);
+    z-index: 5;
+    min-width: 168px;
+    padding: 4px;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__icon-option {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    text-align: left;
+    padding: 0.4rem 0.55rem;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+
+    .favorite-type-icon {
+      width: 20px;
+      height: 20px;
+    }
+
+    &:hover,
+    &.is-active {
+      background: var(--accent-muted);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent-primary);
+      outline-offset: 1px;
+    }
+  }
+
+  .primary-btn,
+  .secondary-btn {
+    border-radius: var(--radius-sm);
+    padding: 0.55rem 1rem;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+  }
+
+  .primary-btn {
+    border: none;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    color: white;
+  }
+
+  .secondary-btn {
+    border: 1px solid var(--border-primary);
+    background: transparent;
+    color: var(--text-secondary);
+  }
+}
