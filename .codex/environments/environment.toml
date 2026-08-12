@@ -6,11 +6,11 @@ name = "ClipBoard"
 script = ""
 
 [[actions]]
-name = "Start"
+name = "Start App"
 icon = "run"
-command = "npm run dev"
+command = "npm run dev; $code = $LASTEXITCODE; if ($code -ne 0) { Write-Host 'App exited with an error.' -ForegroundColor Red } else { Write-Host 'App stopped.' -ForegroundColor Green }; Read-Host 'Press Enter to close the terminal'; exit $code"
 
 [[actions]]
-name = "Release Patch"
+name = "Publish New Version"
 icon = "tool"
-command = "npm version patch; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; git push origin main --follow-tags"
+command = "npm version patch; $code = $LASTEXITCODE; if ($code -eq 0) { git push origin main --follow-tags; $code = $LASTEXITCODE }; if ($code -eq 0) { Write-Host 'Version and tag were pushed. GitHub installer builds have started.' -ForegroundColor Green } else { Write-Host 'Release failed. Read the error above.' -ForegroundColor Red }; Read-Host 'Press Enter to close the terminal'; exit $code"
