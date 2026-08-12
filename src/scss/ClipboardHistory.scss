@@ -12,7 +12,7 @@
 .clipboard-board--grid .clipboard-board__entries {
   display: grid;
   grid-template-columns: repeat(var(--clipboard-grid-columns, 3), minmax(0, 1fr));
-  grid-auto-rows: 16.5rem;
+  grid-auto-rows: 11.75rem;
   gap: 1rem;
 }
 

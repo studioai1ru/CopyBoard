@@ -1,6 +1,6 @@
 # CopyBoard
 
-CopyBoard is a local clipboard history and favorites app for Windows. It runs as an Electron desktop application and keeps copied text, code, and images available for reuse.
+CopyBoard is a local clipboard history and favorites app for Windows and macOS. It runs as an Electron desktop application and keeps copied text, code, and images available for reuse.
 
 ## What it does
 
@@ -21,11 +21,11 @@ CopyBoard stores its data on the local machine. The repository does not include 
 - Electron for the desktop process, clipboard access, tray, and global shortcuts
 - React and Vite for the renderer
 - SCSS for component styling
-- electron-builder for Windows packaging
+- electron-builder for Windows and macOS packaging
 
 ## Requirements
 
-Development and packaging require Windows, Node.js, and npm. The application package produced by the documented command targets Windows.
+Development requires Node.js and npm. Native installers should be packaged on their target operating system: Windows for the NSIS installer and macOS for the DMG image.
 
 ## Install dependencies
 
@@ -61,7 +61,30 @@ Create a Windows installer:
 npm run dist:win
 ```
 
-Packaged artifacts are written to `release/`.
+Create a universal macOS installer for Apple Silicon and Intel Macs:
+
+```bash
+npm run dist:mac
+```
+
+The macOS command must be run on macOS. Packaged artifacts are written to `release/`.
+
+## GitHub releases
+
+The `Build and publish installers` workflow builds both installers on GitHub-hosted Windows and macOS runners.
+
+- Run the workflow manually to test both builds. Installers are stored as workflow artifacts for 14 days.
+- Push a version tag matching `package.json`, such as `v1.0.0`, to create a GitHub Release automatically.
+- Every release includes the Windows EXE, the universal macOS DMG, and `SHA256SUMS.txt`.
+
+Example release:
+
+```bash
+npm version patch
+git push origin main --follow-tags
+```
+
+Installers are unsigned unless signing secrets are configured in the GitHub repository. For macOS distribution without Gatekeeper warnings, add `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`. Windows signing can use `WIN_CSC_LINK` and `WIN_CSC_KEY_PASSWORD`.
 
 ## Local data
 
@@ -80,4 +103,5 @@ These runtime files are not part of the repository.
 npm run lint
 npm run build
 npm run dist:win
+npm run dist:mac
 ```

@@ -2,7 +2,7 @@
   "name": "copyboard",
   "private": true,
   "version": "1.0.0",
-  "description": "Personal clipboard manager for Windows",
+  "description": "Personal clipboard manager for Windows and macOS",
   "type": "module",
   "main": "src/electron/main.js",
   "scripts": {
@@ -12,7 +12,8 @@
     "build": "vite build",
     "dist": "npm run build && electron-builder",
     "dist:linux": "npm run build && electron-builder --linux",
-    "dist:win": "npm run build && electron-builder --win",
+    "dist:win": "npm run build && electron-builder --win --x64",
+    "dist:mac": "npm run build && electron-builder --mac --universal",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -52,7 +53,8 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "public/images/CopyBoard_Logo.png"
+      "icon": "public/images/CopyBoard_Logo.png",
+      "artifactName": "${productName}-${version}-Windows-${arch}-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -62,7 +64,9 @@
     },
     "mac": {
       "target": "dmg",
-      "icon": "public/images/CopyBoard_Logo.png"
+      "icon": "public/images/CopyBoard_Logo.png",
+      "category": "public.app-category.productivity",
+      "artifactName": "${productName}-${version}-macOS-${arch}.${ext}"
     },
     "linux": {
       "target": "AppImage",
