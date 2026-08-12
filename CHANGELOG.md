@@ -9,7 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - Changelog release dates now use the local calendar date instead of UTC.
-- Codex environment actions now have clear names and keep the terminal open so results and errors remain visible.
+- Codex environment actions now have clear names and keep results visible for 30 seconds after completion.
 
 ## [1.0.1] - 2026-08-13
 
