@@ -16,6 +16,7 @@
     "dist:mac": "npm run build && electron-builder --mac --universal --publish never",
     "lint": "eslint .",
     "preview": "vite preview",
+    "release:patch": "node scripts/release-patch.mjs",
     "version": "node scripts/update-changelog.mjs && git add CHANGELOG.md"
   },
   "dependencies": {

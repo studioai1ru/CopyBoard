@@ -13,4 +13,4 @@ command = "npm run dev"
 [[actions]]
 name = "Publish New Version"
 icon = "tool"
-command = "npm version patch && git push origin main --follow-tags"
+command = "npm run release:patch"

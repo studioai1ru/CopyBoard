@@ -91,11 +91,10 @@ The `Build and publish installers` workflow builds both installers on GitHub-hos
 Example release:
 
 ```bash
-npm version patch
-git push origin main --follow-tags
+npm run release:patch
 ```
 
-In the Codex app, the same commands are available as the `Release Patch` project environment action. `npm version patch` moves the `Unreleased` changelog entries into the new version and adds the release date before creating the commit and tag.
+In the Codex app, the same workflow is available as the `Publish New Version` project environment action. It runs lint and build checks, commits current changes when needed, then moves the `Unreleased` changelog entries into the new version, creates the version commit and tag, and pushes everything to GitHub.
 
 Installers are unsigned unless signing secrets are configured in the GitHub repository. For macOS distribution without Gatekeeper warnings, add `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`. Windows signing can use `WIN_CSC_LINK` and `WIN_CSC_KEY_PASSWORD`.
 

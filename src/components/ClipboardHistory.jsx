@@ -54,6 +54,21 @@ const ClipboardHistory = ({
     }
   }, [preferredColumns]);
 
+  const columnsAllowedByWidth = useMemo(() => {
+    if (!gridWidth) return 3;
+    return Math.min(
+      GRID_MAX_COLUMNS,
+      Math.max(
+        GRID_MIN_COLUMNS,
+        Math.floor((gridWidth + GRID_GAP) / (GRID_MIN_CARD_WIDTH + GRID_GAP)),
+      ),
+    );
+  }, [gridWidth]);
+
+  const effectiveColumns = useMemo(() => (
+    Math.min(preferredColumns, columnsAllowedByWidth)
+  ), [columnsAllowedByWidth, preferredColumns]);
+
   useEffect(() => {
     const board = boardRef.current;
     if (!board || viewMode !== 'grid') return undefined;
@@ -66,26 +81,16 @@ const ClipboardHistory = ({
       if (now - lastScaleAtRef.current < 90) return;
       lastScaleAtRef.current = now;
 
-      setPreferredColumns((current) => (
-        Math.min(
-          GRID_MAX_COLUMNS,
-          Math.max(GRID_MIN_COLUMNS, current + (event.deltaY > 0 ? 1 : -1)),
-        )
+      const direction = event.deltaY > 0 ? 1 : -1;
+      setPreferredColumns(Math.min(
+        columnsAllowedByWidth,
+        Math.max(GRID_MIN_COLUMNS, effectiveColumns + direction),
       ));
     };
 
     board.addEventListener('wheel', handleScaleWheel, { passive: false });
     return () => board.removeEventListener('wheel', handleScaleWheel);
-  }, [viewMode]);
-
-  const effectiveColumns = useMemo(() => {
-    if (!gridWidth) return Math.min(preferredColumns, 3);
-    const columnsAllowedByWidth = Math.max(
-      GRID_MIN_COLUMNS,
-      Math.floor((gridWidth + GRID_GAP) / (GRID_MIN_CARD_WIDTH + GRID_GAP)),
-    );
-    return Math.min(preferredColumns, GRID_MAX_COLUMNS, columnsAllowedByWidth);
-  }, [gridWidth, preferredColumns]);
+  }, [columnsAllowedByWidth, effectiveColumns, viewMode]);
 
   if (items.length === 0) {
     return (
