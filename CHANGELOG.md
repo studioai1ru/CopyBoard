@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-08-13
+
 ### Added
 
 - Added a language-adjacent setting to show or fully hide the top-edge drawer tab, enabled by default.
