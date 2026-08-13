@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.18] - 2026-08-14
+
 ### Fixed
 
 - First-launch System appearance now synchronizes the native theme of every drawer window before it is shown.
