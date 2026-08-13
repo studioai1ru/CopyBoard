@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../utils/i18n';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import '../scss/EditModal.scss';
 
 const EditModal = ({ item, onSave, onCancel }) => {
   const { t } = useLanguage();
   const dialogRef = useRef(null);
   const [draft, setDraft] = useState(item.content);
+
+  useEscapeKey(Boolean(item), onCancel);
 
   useEffect(() => {
     setDraft(item.content);

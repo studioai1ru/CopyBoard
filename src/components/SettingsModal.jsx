@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../utils/i18n';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { desktop } from '../utils/desktop';
 import '../scss/SettingsModal.scss';
 
@@ -91,6 +92,8 @@ const SettingsModal = ({
     }
     onDismiss();
   };
+
+  useEscapeKey(open, requestClose);
 
   const armConfirmation = (kind) => {
     const isClear = kind === 'clear';

@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- Клавиша Esc теперь последовательно закрывает активное меню, окно предпросмотра или форму, и только после этого сворачивает приложение в трей.
+
 ## [1.0.3] - 2026-08-13
 
 ### Fixed
