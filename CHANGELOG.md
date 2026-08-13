@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.16] - 2026-08-14
+
 ### Fixed
 
 - File and folder favorites now copy back as file references and remain labeled as files in clipboard history.
