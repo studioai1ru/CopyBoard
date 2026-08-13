@@ -64,9 +64,11 @@ export function useClipboardHistory({ maxItems, autoDelete }) {
 
       lastFingerprintRef.current = mark;
       localRevisionRef.current += 1;
-      setClipboardHistory((prev) => (
-        mergeHistoryEntry(prev, entry, { maxItems, autoDelete })
-      ));
+      setClipboardHistory((prev) => {
+        const next = mergeHistoryEntry(prev, entry, { maxItems, autoDelete });
+        historyRef.current = next;
+        return next;
+      });
     },
     [autoDelete, maxItems],
   );
@@ -165,6 +167,7 @@ export function useClipboardHistory({ maxItems, autoDelete }) {
 
         if (!alive || revision !== localRevisionRef.current) return;
         const pruned = trimHistory(items, { maxItems, autoDelete });
+        historyRef.current = pruned;
         setClipboardHistory(pruned);
         if (pruned[0]) {
           lastFingerprintRef.current = fingerprint(pruned[0].type, pruned[0].content);
@@ -206,7 +209,13 @@ export function useClipboardHistory({ maxItems, autoDelete }) {
         const stored = await api.history.load();
         if (!active || revision !== localRevisionRef.current) return;
         const next = trimHistory(stored, { maxItems, autoDelete });
-        if (historySignature(next) !== historySignature(historyRef.current)) {
+        const local = historyRef.current;
+        const localFirstTime = Date.parse(local[0]?.timestamp || '') || 0;
+        const storedFirstTime = Date.parse(next[0]?.timestamp || '') || 0;
+        if (revision > 0 && local.length > 0 && localFirstTime >= storedFirstTime) {
+          return;
+        }
+        if (historySignature(next) !== historySignature(local)) {
           historyRef.current = next;
           setClipboardHistory(next);
         }

@@ -80,6 +80,7 @@ const api = {
   quickAccess: {
     ready: (size) => invoke('quick_access_ready', size),
     configure: (size) => invoke('quick_access_configure', size),
+    setEnabled: (enabled) => invoke('quick_access_set_enabled', { enabled }),
     setEdgeVisible: (visible) => invoke('quick_access_set_edge_visible', { visible }),
     setOpen: (open, reduceMotion = false) => (
       invoke('quick_access_set_open', { open, reduceMotion })

@@ -145,6 +145,7 @@ export const ru = {
 
     language: {
       interfaceLanguage: 'Язык интерфейса',
+      quickAccessEnabled: 'Включить шторку шаблонов',
       showQuickAccessEdge: 'Отображать край шторки',
     },
 

@@ -43,6 +43,13 @@ const resolveTrackWidth = (widths, gap, availableWidth) => {
   return low;
 };
 
+const DRAG_THRESHOLD_PX = 8;
+
+const favoriteIdFromPoint = (x, y) => {
+  const node = document.elementFromPoint(x, y);
+  return node?.closest?.('[data-favorite-id]')?.getAttribute('data-favorite-id') || null;
+};
+
 const FrequentPanel = ({ items, onCopy, onEdit, onDelete, onReorder }) => {
   const { t } = useLanguage();
   const [copiedId, setCopiedId] = useState(null);
@@ -53,6 +60,9 @@ const FrequentPanel = ({ items, onCopy, onEdit, onDelete, onReorder }) => {
   const menuRef = useRef(null);
   const listRef = useRef(null);
   const trackRef = useRef(null);
+  const pointerDragRef = useRef(null);
+  const dragOverIdRef = useRef(null);
+  const suppressClickUntilRef = useRef(0);
 
   const closeMenu = useCallback(() => {
     setMenu(null);
@@ -135,6 +145,8 @@ const FrequentPanel = ({ items, onCopy, onEdit, onDelete, onReorder }) => {
   };
 
   const finishDrag = () => {
+    pointerDragRef.current = null;
+    dragOverIdRef.current = null;
     setDraggedId(null);
     setDragOverId(null);
   };
@@ -149,13 +161,67 @@ const FrequentPanel = ({ items, onCopy, onEdit, onDelete, onReorder }) => {
     list.scrollLeft += event.deltaY;
   };
 
-  const handleDrop = async (event, targetId = null) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const activeId = event.dataTransfer.getData('text/plain') || draggedId;
-    if (activeId && activeId !== targetId) {
-      await onReorder?.(activeId, targetId);
+  const setHoverTarget = (nextId) => {
+    if (dragOverIdRef.current === nextId) return;
+    dragOverIdRef.current = nextId;
+    setDragOverId(nextId);
+  };
+
+  const handlePointerDown = (event, item) => {
+    if (event.button !== 0) return;
+    pointerDragRef.current = {
+      id: item.id,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      active: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handlePointerMove = (event, item) => {
+    const drag = pointerDragRef.current;
+    if (!drag || drag.id !== item.id || drag.pointerId !== event.pointerId) return;
+
+    const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+    if (!drag.active) {
+      if (distance < DRAG_THRESHOLD_PX) return;
+      drag.active = true;
+      setDraggedId(item.id);
     }
+
+    const overId = favoriteIdFromPoint(event.clientX, event.clientY);
+    setHoverTarget(overId && overId !== item.id ? overId : null);
+  };
+
+  const handlePointerUp = async (event, item) => {
+    const drag = pointerDragRef.current;
+    if (!drag || drag.id !== item.id || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    if (drag.active) {
+      suppressClickUntilRef.current = performance.now() + 400;
+      const targetId = favoriteIdFromPoint(event.clientX, event.clientY);
+      if (targetId && targetId !== drag.id) {
+        await onReorder?.(drag.id, targetId);
+      } else if (!targetId) {
+        const list = listRef.current?.getBoundingClientRect();
+        const insideList = Boolean(
+          list
+          && event.clientX >= list.left
+          && event.clientX <= list.right
+          && event.clientY >= list.top
+          && event.clientY <= list.bottom,
+        );
+        if (insideList) await onReorder?.(drag.id, null);
+      }
+    }
+
     finishDrag();
   };
 
@@ -203,27 +269,20 @@ const FrequentPanel = ({ items, onCopy, onEdit, onDelete, onReorder }) => {
       <button
         key={item.id}
         type="button"
+        data-favorite-id={item.id}
         className={`frequent-chip frequent-chip--${iconId} frequent-chip--display-${displayMode} ${copiedId === item.id ? 'copied' : ''} ${draggedId === item.id ? 'is-dragging' : ''} ${dragOverId === item.id ? 'is-drag-over' : ''}`}
-        draggable
         aria-label={label}
         aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown"
-        onClick={() => handleCopy(item)}
+        onClick={() => {
+          if (performance.now() < suppressClickUntilRef.current) return;
+          handleCopy(item);
+        }}
         onContextMenu={(event) => openMenu(event, item)}
         onKeyDown={(event) => handleReorderKeyDown(event, item, index)}
-        onDragStart={(event) => {
-          event.dataTransfer.effectAllowed = 'move';
-          event.dataTransfer.setData('text/plain', item.id);
-          setDraggedId(item.id);
-        }}
-        onDragEnter={() => {
-          if (draggedId && draggedId !== item.id) setDragOverId(item.id);
-        }}
-        onDragOver={(event) => {
-          event.preventDefault();
-          event.dataTransfer.dropEffect = 'move';
-        }}
-        onDrop={(event) => handleDrop(event, item.id)}
-        onDragEnd={finishDrag}
+        onPointerDown={(event) => handlePointerDown(event, item)}
+        onPointerMove={(event) => handlePointerMove(event, item)}
+        onPointerUp={(event) => handlePointerUp(event, item)}
+        onPointerCancel={finishDrag}
         title={isImageItem(item) ? label : item.content}
       >
         {showIcon && <FavoriteTypeIcon icon={iconId} content={item.content} size={14} />}
@@ -238,11 +297,6 @@ const FrequentPanel = ({ items, onCopy, onEdit, onDelete, onReorder }) => {
         ref={listRef}
         className="frequent-panel__list"
         onWheel={handleWheel}
-        onDragOver={(event) => {
-          event.preventDefault();
-          event.dataTransfer.dropEffect = 'move';
-        }}
-        onDrop={(event) => handleDrop(event)}
       >
         <div
           ref={trackRef}

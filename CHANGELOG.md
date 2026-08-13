@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Added a setting to enable or disable the templates drawer. The drawer-edge setting appears only while the drawer is on.
+
+### Changed
+
+- New installations now start with Windows by default. Closing still minimizes to the tray, and the window opens visible unless Start minimized is turned on.
+- The templates drawer uses tighter side padding, and non-icon favorites stretch to the drawer width.
+
+### Fixed
+
+- Copied items now appear in history immediately instead of waiting for disk persistence.
+- Hiding the templates drawer edge no longer disables the drawer: moving the pointer to the top of the screen still opens it.
+- Favorite chips on the main window can be reordered by dragging again.
+
 ## [1.0.10] - 2026-08-13
 
 ### Changed

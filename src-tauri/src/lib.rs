@@ -17,7 +17,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc, Mutex,
+        mpsc, Arc, Mutex,
     },
     thread,
     time::Duration,
@@ -41,7 +41,7 @@ const MAX_IMAGE_CHARS: usize = 40_000_000;
 const QUICK_ACCESS_LABEL: &str = "quick-access";
 const QUICK_ACCESS_DEFAULT_WIDTH: u64 = 278;
 const QUICK_ACCESS_DEFAULT_HEIGHT: u64 = 64;
-const QUICK_ACCESS_HOT_ZONE_HEIGHT: f64 = 3.0;
+const QUICK_ACCESS_HOT_ZONE_HEIGHT: f64 = 8.0;
 const QUICK_ACCESS_VISIBLE_EDGE_HEIGHT: f64 = 8.0;
 const QUICK_ACCESS_POLL_MS: u64 = 80;
 
@@ -72,6 +72,7 @@ struct RuntimeState {
     quick_access_height: AtomicU64,
     quick_access_open: AtomicBool,
     quick_access_ready: AtomicBool,
+    quick_access_enabled: AtomicBool,
     quick_access_edge_visible: AtomicBool,
 }
 
@@ -111,8 +112,9 @@ fn defaults() -> Value {
         "language": "ru",
         "startMinimized": false,
         "closeBehavior": "minimize",
-        "autoStart": false,
+        "autoStart": true,
         "showTrayNotifications": true,
+        "quickAccessEnabled": true,
         "showQuickAccessEdge": true,
         "quickAccessHotkey": "Ctrl+Shift+V",
         "clearAllHotkey": "Ctrl+Shift+Delete",
@@ -306,16 +308,22 @@ fn serialize_history_item(item: &Value, image_root: &Path) -> Value {
     serialized
 }
 
-fn history_load_unlocked(state: &RuntimeState) -> Vec<Value> {
+fn history_items_from_disk(state: &RuntimeState, hydrate: bool) -> Vec<Value> {
     let mut items = load_json(&history_path(state), json!([]))
         .as_array()
         .cloned()
         .unwrap_or_default();
-    let image_root = images_dir(state);
-    for item in &mut items {
-        hydrate_history_item(item, &image_root);
+    if hydrate {
+        let image_root = images_dir(state);
+        for item in &mut items {
+            hydrate_history_item(item, &image_root);
+        }
     }
     items
+}
+
+fn history_load_unlocked(state: &RuntimeState) -> Vec<Value> {
+    history_items_from_disk(state, true)
 }
 
 fn history_save_unlocked(state: &RuntimeState, items: &[Value]) -> Result<(), String> {
@@ -384,7 +392,7 @@ fn persist_clipboard_capture<R: Runtime>(app: &AppHandle<R>, capture: &Clipboard
 
     let cutoff = Utc::now().timestamp_millis() - retention_ms;
     let _history_guard = state.history_io.lock().ok();
-    let mut items = history_load_unlocked(&state);
+    let mut items = history_items_from_disk(&state, false);
     items.retain(|item| {
         if item.get("content").and_then(Value::as_str) == Some(capture.content.as_str()) {
             return false;
@@ -427,7 +435,6 @@ fn record_and_emit_capture<R: Runtime>(
         content,
         timestamp: Utc::now().to_rfc3339(),
     };
-    persist_clipboard_capture(app, &capture);
     let _ = app.emit(
         "copyboard:clip.capture",
         json!({
@@ -437,6 +444,7 @@ fn record_and_emit_capture<R: Runtime>(
             "force": force,
         }),
     );
+    persist_clipboard_capture(app, &capture);
 }
 
 fn image_fingerprint(image: &ImageData<'_>) -> String {
@@ -567,12 +575,12 @@ fn capture_clipboard_change(app: &AppHandle) {
 }
 
 struct AppClipboardHandler {
-    app: AppHandle,
+    tx: mpsc::Sender<()>,
 }
 
 impl ClipboardHandler for AppClipboardHandler {
     fn on_clipboard_change(&mut self) {
-        capture_clipboard_change(&self.app);
+        let _ = self.tx.send(());
     }
 }
 
@@ -585,9 +593,20 @@ fn start_clipboard_watcher(app: AppHandle, runtime: &ClipboardRuntime) -> Result
         return Ok(());
     }
 
+    let (tx, rx) = mpsc::channel();
+    let worker_app = app.clone();
+    thread::Builder::new()
+        .name("clipboard-capture".into())
+        .spawn(move || {
+            while rx.recv().is_ok() {
+                capture_clipboard_change(&worker_app);
+            }
+        })
+        .map_err(|error| error.to_string())?;
+
     let mut watcher = ClipboardWatcherContext::new().map_err(|error| error.to_string())?;
     let shutdown = watcher
-        .add_handler(AppClipboardHandler { app })
+        .add_handler(AppClipboardHandler { tx })
         .get_shutdown_channel();
     thread::Builder::new()
         .name("clipboard-watcher".into())
@@ -993,7 +1012,7 @@ fn window_hide(window: WebviewWindow) -> Result<(), String> {
 fn quick_access_geometry(
     window: &WebviewWindow,
     state: &RuntimeState,
-) -> Result<(i32, i32, i32, u32, u32, i32), String> {
+) -> Result<(i32, i32, i32, u32, u32, i32, i32, u32), String> {
     let monitor = match window
         .primary_monitor()
         .map_err(|error| error.to_string())?
@@ -1025,7 +1044,16 @@ fn quick_access_geometry(
     let x = position.x + ((size.width as i64 - width as i64) / 2) as i32;
     let open_y = position.y;
     let closed_y = open_y - height as i32 + edge_height;
-    Ok((x, open_y, closed_y, width, height, trigger_height))
+    Ok((
+        x,
+        open_y,
+        closed_y,
+        width,
+        height,
+        trigger_height,
+        position.x,
+        size.width,
+    ))
 }
 
 fn set_quick_access_size(state: &RuntimeState, width: f64, height: f64) {
@@ -1044,7 +1072,7 @@ fn position_quick_access(
     state: &RuntimeState,
     open: bool,
 ) -> Result<(), String> {
-    let (x, open_y, closed_y, width, height, _) = quick_access_geometry(window, state)?;
+    let (x, open_y, closed_y, width, height, ..) = quick_access_geometry(window, state)?;
     window
         .set_size(Size::Physical(PhysicalSize::new(width, height)))
         .map_err(|error| error.to_string())?;
@@ -1056,10 +1084,49 @@ fn position_quick_access(
         .map_err(|error| error.to_string())
 }
 
+fn stop_quick_access_watcher(state: &RuntimeState) {
+    state
+        .quick_access_watcher_generation
+        .fetch_add(1, Ordering::SeqCst);
+}
+
+fn apply_quick_access_state(app: &AppHandle, state: &RuntimeState) {
+    let Some(window) = app.get_webview_window(QUICK_ACCESS_LABEL) else {
+        return;
+    };
+    let enabled = state.quick_access_enabled.load(Ordering::SeqCst);
+    if !enabled {
+        stop_quick_access_watcher(state);
+        state.quick_access_open.store(false, Ordering::SeqCst);
+        state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
+        let _ = window.hide();
+        return;
+    }
+
+    if !state.quick_access_ready.load(Ordering::SeqCst) {
+        return;
+    }
+
+    state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
+    let open = state.quick_access_open.load(Ordering::SeqCst);
+    let _ = position_quick_access(&window, state, open);
+    let _ = window.set_focusable(false);
+    let _ = window.set_always_on_top(true);
+    let _ = window.show();
+
+    if state.quick_access_edge_visible.load(Ordering::SeqCst) {
+        stop_quick_access_watcher(state);
+    } else {
+        start_quick_access_watcher(app.clone());
+    }
+}
+
 fn start_quick_access_watcher(app: AppHandle) {
     let token = {
         let state = app.state::<RuntimeState>();
-        if state.quick_access_edge_visible.load(Ordering::SeqCst) {
+        if !state.quick_access_enabled.load(Ordering::SeqCst)
+            || state.quick_access_edge_visible.load(Ordering::SeqCst)
+        {
             return;
         }
         state
@@ -1080,6 +1147,7 @@ fn start_quick_access_watcher(app: AppHandle) {
                 .quick_access_watcher_generation
                 .load(Ordering::SeqCst)
                 != token
+                || !state.quick_access_enabled.load(Ordering::SeqCst)
                 || state.quick_access_edge_visible.load(Ordering::SeqCst)
             {
                 return;
@@ -1095,10 +1163,10 @@ fn start_quick_access_watcher(app: AppHandle) {
 
             let cursor_in_zone = quick_access_geometry(&window, &state)
                 .ok()
-                .and_then(|(x, open_y, _, width, _, hot_zone_height)| {
+                .and_then(|(_, open_y, _, _, _, hot_zone_height, zone_x, zone_width)| {
                     app.cursor_position().ok().map(|cursor| {
-                        cursor.x >= x as f64
-                            && cursor.x <= (x + width as i32) as f64
+                        cursor.x >= zone_x as f64
+                            && cursor.x <= (zone_x + zone_width as i32) as f64
                             && cursor.y >= open_y as f64
                             && cursor.y <= (open_y + hot_zone_height) as f64
                     })
@@ -1121,17 +1189,12 @@ fn quick_access_ready(
     width: f64,
     height: f64,
 ) -> Result<bool, String> {
-    let window = app
-        .get_webview_window(QUICK_ACCESS_LABEL)
+    app.get_webview_window(QUICK_ACCESS_LABEL)
         .ok_or_else(|| "Quick access window is unavailable".to_string())?;
-    state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
     set_quick_access_size(&state, width, height);
     state.quick_access_open.store(false, Ordering::SeqCst);
-    position_quick_access(&window, &state, false)?;
-    let _ = window.set_focusable(false);
-    let _ = window.set_always_on_top(true);
-    window.show().map_err(|error| error.to_string())?;
     state.quick_access_ready.store(true, Ordering::SeqCst);
+    apply_quick_access_state(&app, &state);
     Ok(true)
 }
 
@@ -1142,11 +1205,14 @@ fn quick_access_configure(
     width: f64,
     height: f64,
 ) -> Result<bool, String> {
+    set_quick_access_size(&state, width, height);
+    if !state.quick_access_enabled.load(Ordering::SeqCst) {
+        return Ok(true);
+    }
     let window = app
         .get_webview_window(QUICK_ACCESS_LABEL)
         .ok_or_else(|| "Quick access window is unavailable".to_string())?;
     state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
-    set_quick_access_size(&state, width, height);
     let open = state.quick_access_open.load(Ordering::SeqCst);
     position_quick_access(&window, &state, open)?;
     Ok(true)
@@ -1162,22 +1228,19 @@ fn quick_access_set_edge_visible(
     state
         .quick_access_edge_visible
         .store(visible, Ordering::SeqCst);
-    if visible {
-        state
-            .quick_access_watcher_generation
-            .fetch_add(1, Ordering::SeqCst);
-    } else {
-        start_quick_access_watcher(app.clone());
-    }
+    apply_quick_access_state(&app, &state);
+    Ok(true)
+}
 
-    if state.quick_access_ready.load(Ordering::SeqCst) {
-        if let Some(window) = app.get_webview_window(QUICK_ACCESS_LABEL) {
-            state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
-            let open = state.quick_access_open.load(Ordering::SeqCst);
-            position_quick_access(&window, &state, open)?;
-        }
-    }
-
+#[tauri::command]
+fn quick_access_set_enabled(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    enabled: bool,
+) -> Result<bool, String> {
+    save_setting(&state, "quickAccessEnabled", Value::Bool(enabled))?;
+    state.quick_access_enabled.store(enabled, Ordering::SeqCst);
+    apply_quick_access_state(&app, &state);
     Ok(true)
 }
 
@@ -1188,11 +1251,15 @@ fn quick_access_set_open(
     open: bool,
     reduce_motion: Option<bool>,
 ) -> Result<bool, String> {
+    if !state.quick_access_enabled.load(Ordering::SeqCst) {
+        return Ok(true);
+    }
     let window = app
         .get_webview_window(QUICK_ACCESS_LABEL)
         .ok_or_else(|| "Quick access window is unavailable".to_string())?;
+    let _ = window.show();
     state.quick_access_open.store(open, Ordering::SeqCst);
-    let (x, open_y, closed_y, width, height, _) = quick_access_geometry(&window, &state)?;
+    let (x, open_y, closed_y, width, height, ..) = quick_access_geometry(&window, &state)?;
     window
         .set_size(Size::Physical(PhysicalSize::new(width, height)))
         .map_err(|error| error.to_string())?;
@@ -1534,7 +1601,7 @@ pub fn run() {
             let launch_hidden = !cfg!(debug_assertions)
                 && (std::env::args().any(|argument| argument == "--hidden")
                     || setting_bool(&settings, "startMinimized", false));
-            let auto_start = setting_bool(&settings, "autoStart", false);
+            let auto_start = setting_bool(&settings, "autoStart", true);
             let state = RuntimeState {
                 data_dir,
                 settings: Mutex::new(settings.clone()),
@@ -1548,6 +1615,11 @@ pub fn run() {
                 quick_access_height: AtomicU64::new(QUICK_ACCESS_DEFAULT_HEIGHT),
                 quick_access_open: AtomicBool::new(false),
                 quick_access_ready: AtomicBool::new(false),
+                quick_access_enabled: AtomicBool::new(setting_bool(
+                    &settings,
+                    "quickAccessEnabled",
+                    true,
+                )),
                 quick_access_edge_visible: AtomicBool::new(setting_bool(
                     &settings,
                     "showQuickAccessEdge",
@@ -1577,6 +1649,7 @@ pub fn run() {
             quick_access_ready,
             quick_access_configure,
             quick_access_set_edge_visible,
+            quick_access_set_enabled,
             quick_access_set_open,
             clip_read_text,
             clip_read_image,

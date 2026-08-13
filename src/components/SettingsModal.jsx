@@ -217,10 +217,17 @@ const SettingsModal = ({
             </SelectField>
             <div className="preference-card__toggles">
               <Toggle
-                checked={current.showQuickAccessEdge}
-                onChange={change.showQuickAccessEdge}
-                label={t('settings.language.showQuickAccessEdge')}
+                checked={current.quickAccessEnabled}
+                onChange={change.quickAccessEnabled}
+                label={t('settings.language.quickAccessEnabled')}
               />
+              {current.quickAccessEnabled && (
+                <Toggle
+                  checked={current.showQuickAccessEdge}
+                  onChange={change.showQuickAccessEdge}
+                  label={t('settings.language.showQuickAccessEdge')}
+                />
+              )}
             </div>
           </section>
 

@@ -145,6 +145,7 @@ export const en = {
 
     language: {
       interfaceLanguage: 'Interface language',
+      quickAccessEnabled: 'Enable templates drawer',
       showQuickAccessEdge: 'Show drawer edge',
     },
 

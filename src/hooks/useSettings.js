@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { desktop } from '../utils/desktop';
 import {
   DEFAULT_QUICK_ACCESS_EDGE_VISIBLE,
+  DEFAULT_QUICK_ACCESS_ENABLED,
   normalizeQuickAccessEdgeVisible,
+  normalizeQuickAccessEnabled,
 } from '../utils/quickAccessSettings';
 
 const DEFAULTS = {
@@ -10,8 +12,9 @@ const DEFAULTS = {
   viewMode: 'list',
   closeBehavior: 'minimize',
   startMinimized: false,
-  autoStart: false,
+  autoStart: true,
   showTrayNotifications: true,
+  quickAccessEnabled: DEFAULT_QUICK_ACCESS_ENABLED,
   showQuickAccessEdge: DEFAULT_QUICK_ACCESS_EDGE_VISIBLE,
   quickAccessHotkey: 'Ctrl+Shift+V',
   clearAllHotkey: 'Ctrl+Shift+Delete',
@@ -36,8 +39,9 @@ export function useSettings({ theme, handleThemeChange, availableThemes = THEMES
   const [viewMode, setViewMode] = useState('list');
   const [closeBehavior, setCloseBehavior] = useState('minimize');
   const [startMinimized, setStartMinimized] = useState(false);
-  const [autoStart, setAutoStart] = useState(false);
+  const [autoStart, setAutoStart] = useState(true);
   const [showTrayNotifications, setShowTrayNotifications] = useState(true);
+  const [quickAccessEnabled, setQuickAccessEnabled] = useState(DEFAULT_QUICK_ACCESS_ENABLED);
   const [showQuickAccessEdge, setShowQuickAccessEdge] = useState(
     DEFAULT_QUICK_ACCESS_EDGE_VISIBLE,
   );
@@ -87,6 +91,7 @@ export function useSettings({ theme, handleThemeChange, availableThemes = THEMES
         if (settings.showTrayNotifications !== undefined) {
           setShowTrayNotifications(settings.showTrayNotifications);
         }
+        setQuickAccessEnabled(normalizeQuickAccessEnabled(settings.quickAccessEnabled));
         setShowQuickAccessEdge(normalizeQuickAccessEdgeVisible(settings.showQuickAccessEdge));
         if (settings.quickAccessHotkey) setQuickAccessHotkey(settings.quickAccessHotkey);
         if (settings.clearAllHotkey) setClearAllHotkey(settings.clearAllHotkey);
@@ -130,6 +135,7 @@ export function useSettings({ theme, handleThemeChange, availableThemes = THEMES
       startMinimized,
       autoStart,
       showTrayNotifications,
+      quickAccessEnabled,
       showQuickAccessEdge,
       quickAccessHotkey,
       clearAllHotkey,
@@ -150,6 +156,7 @@ export function useSettings({ theme, handleThemeChange, availableThemes = THEMES
     startMinimized,
     autoStart,
     showTrayNotifications,
+    quickAccessEnabled,
     showQuickAccessEdge,
     quickAccessHotkey,
     clearAllHotkey,
@@ -174,8 +181,13 @@ export function useSettings({ theme, handleThemeChange, availableThemes = THEMES
 
   useEffect(() => {
     if (!loadedRef.current) return;
+    desktop()?.quickAccess?.setEnabled?.(quickAccessEnabled);
+  }, [settingsLoaded, quickAccessEnabled]);
+
+  useEffect(() => {
+    if (!loadedRef.current || !quickAccessEnabled) return;
     desktop()?.quickAccess?.setEdgeVisible?.(showQuickAccessEdge);
-  }, [settingsLoaded, showQuickAccessEdge]);
+  }, [settingsLoaded, quickAccessEnabled, showQuickAccessEdge]);
 
   useEffect(() => {
     if (!loadedRef.current) return;
@@ -193,6 +205,7 @@ export function useSettings({ theme, handleThemeChange, availableThemes = THEMES
     setStartMinimized(defaults.startMinimized);
     setAutoStart(defaults.autoStart);
     setShowTrayNotifications(defaults.showTrayNotifications);
+    setQuickAccessEnabled(defaults.quickAccessEnabled);
     setShowQuickAccessEdge(defaults.showQuickAccessEdge);
     setQuickAccessHotkey(defaults.quickAccessHotkey);
     setClearAllHotkey(defaults.clearAllHotkey);
@@ -219,6 +232,8 @@ export function useSettings({ theme, handleThemeChange, availableThemes = THEMES
     setAutoStart,
     showTrayNotifications,
     setShowTrayNotifications,
+    quickAccessEnabled,
+    setQuickAccessEnabled,
     showQuickAccessEdge,
     setShowQuickAccessEdge,
     quickAccessHotkey,

@@ -40,7 +40,10 @@
   border-radius: var(--radius-md);
   background: var(--bg-secondary);
   cursor: grab;
+  user-select: none;
+  touch-action: none;
   text-align: left;
+  -webkit-user-drag: none;
   transition: border-color var(--transition-fast), background var(--transition-fast);
 
   &:hover {
@@ -61,6 +64,14 @@
   &.is-drag-over {
     border-color: var(--accent-primary);
     box-shadow: inset 3px 0 0 var(--accent-primary);
+  }
+
+  svg,
+  img,
+  .favorite-type-icon,
+  &__label {
+    pointer-events: none;
+    -webkit-user-drag: none;
   }
 
   &__label {
