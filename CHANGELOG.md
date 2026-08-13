@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.17] - 2026-08-14
+
 ### Fixed
 
 - The favorite editor opened from the drawer now becomes visible reliably and no longer closes itself when its background data is stale.
