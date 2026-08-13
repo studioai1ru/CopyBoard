@@ -21,6 +21,7 @@ export function useClipboardHistory({ maxItems, autoDelete }) {
   const readyRef = useRef(false);
   const historyRef = useRef([]);
   const localRevisionRef = useRef(0);
+  const syncRequestRef = useRef(0);
 
   historyRef.current = clipboardHistory;
 
@@ -153,15 +154,10 @@ export function useClipboardHistory({ maxItems, autoDelete }) {
 
         if (api?.history?.load) {
           items = await api.history.load();
-        }
-
-        if (!items.length) {
+        } else {
           const legacy = localStorage.getItem('clipboardHistory');
           if (legacy) {
             items = JSON.parse(legacy);
-            if (api?.history?.migrate) {
-              items = await api.history.migrate(items);
-            }
           }
         }
 
@@ -199,42 +195,39 @@ export function useClipboardHistory({ maxItems, autoDelete }) {
 
   useEffect(() => {
     const api = desktop();
-    if (!api?.clip) return undefined;
+    if (!api?.history?.onChanged || !api.history?.load) return undefined;
 
     let active = true;
-    const syncAfterSubscribe = async () => {
-      if (!api.history?.load) return;
-      const revision = localRevisionRef.current;
+    const syncFromNative = async () => {
+      const request = syncRequestRef.current + 1;
+      syncRequestRef.current = request;
       try {
         const stored = await api.history.load();
-        if (!active || revision !== localRevisionRef.current) return;
+        if (!active || request !== syncRequestRef.current) return;
         const next = trimHistory(stored, { maxItems, autoDelete });
-        const local = historyRef.current;
-        const localFirstTime = Date.parse(local[0]?.timestamp || '') || 0;
-        const storedFirstTime = Date.parse(next[0]?.timestamp || '') || 0;
-        if (revision > 0 && local.length > 0 && localFirstTime >= storedFirstTime) {
-          return;
-        }
-        if (historySignature(next) !== historySignature(local)) {
+        if (historySignature(next) !== historySignature(historyRef.current)) {
           historyRef.current = next;
           setClipboardHistory(next);
         }
+        if (next[0]) {
+          lastFingerprintRef.current = fingerprint(next[0].type, next[0].content);
+        }
       } catch (error) {
-        console.error('Initial history synchronization failed:', error);
+        console.error('History synchronization failed:', error);
       }
     };
 
-    const offCapture = api.clip.onCapture(commitCapture, syncAfterSubscribe);
+    const offChanged = api.history.onChanged(syncFromNative, syncFromNative);
     const offWipe = api.history?.onWipeShortcut?.(() => {
       clearHistory();
     });
 
     return () => {
       active = false;
-      offCapture?.();
+      offChanged?.();
       offWipe?.();
     };
-  }, [autoDelete, clearHistory, commitCapture, maxItems]);
+  }, [autoDelete, clearHistory, maxItems]);
 
   return {
     loading,

@@ -1,5 +1,4 @@
-const MIN_DRAWER_WIDTH = 52;
-const MAX_DRAWER_WIDTH = 278;
+export const DRAWER_WIDTH = 278;
 const MIN_DRAWER_HEIGHT = 44;
 const MAX_DRAWER_HEIGHT = 420;
 
@@ -19,9 +18,9 @@ export function groupQuickAccessItems(items) {
   return rows;
 }
 
-export function clampQuickAccessSize(width, height) {
+export function clampQuickAccessSize(_width, height) {
   return {
-    width: Math.min(MAX_DRAWER_WIDTH, Math.max(MIN_DRAWER_WIDTH, Math.ceil(width))),
+    width: DRAWER_WIDTH,
     height: Math.min(MAX_DRAWER_HEIGHT, Math.max(MIN_DRAWER_HEIGHT, Math.ceil(height))),
   };
 }

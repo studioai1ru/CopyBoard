@@ -17,6 +17,7 @@
     "dist:mac": "node scripts/package-tauri.mjs mac",
     "lint": "eslint .",
     "test": "node --test",
+    "test:emulation": "node scripts/emulate-ui.mjs",
     "preview": "vite preview",
     "release:patch": "node scripts/release-patch.mjs",
     "tauri": "tauri",

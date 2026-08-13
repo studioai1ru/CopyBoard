@@ -17,8 +17,8 @@ test('normal favorites stay on separate rows while adjacent icon-only favorites 
   ]);
 });
 
-test('drawer measurements stay compact and bounded', () => {
-  assert.deepEqual(clampQuickAccessSize(20, 10), { width: 52, height: 44 });
-  assert.deepEqual(clampQuickAccessSize(240.2, 125.1), { width: 241, height: 126 });
+test('drawer width stays fixed while height remains bounded', () => {
+  assert.deepEqual(clampQuickAccessSize(20, 10), { width: 278, height: 44 });
+  assert.deepEqual(clampQuickAccessSize(240.2, 125.1), { width: 278, height: 126 });
   assert.deepEqual(clampQuickAccessSize(900, 900), { width: 278, height: 420 });
 });

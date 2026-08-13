@@ -10,47 +10,35 @@
 }
 
 .quick-access-surface .frequent-modal-overlay {
+  top: 0;
   inset: 0;
-  align-items: stretch;
-  padding: 8px;
+  align-items: center;
+  padding: var(--spacing-lg);
   background: transparent;
 }
 
 .quick-access-surface .frequent-modal {
-  width: 100%;
-  max-height: 100%;
-  border-radius: var(--radius-lg);
-}
-
-.quick-access-surface .frequent-modal__form {
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-}
-
-.quick-access-surface .frequent-modal__body {
-  gap: var(--spacing-sm);
+  max-height: calc(100vh - 2 * var(--spacing-lg));
 }
 
 .quick-drawer {
   position: relative;
   display: grid;
-  inline-size: fit-content;
-  min-inline-size: 52px;
-  max-inline-size: 278px;
+  inline-size: 278px;
   max-block-size: 420px;
   grid-template-rows: minmax(0, auto) 20px;
-  overflow: hidden;
+  overflow: visible;
   border: 0;
   background: transparent;
   color: var(--text-primary);
   overscroll-behavior: contain;
-  contain: layout style paint;
+  contain: layout style;
 }
 
 .quick-drawer__items {
   display: flex;
-  inline-size: fit-content;
-  max-inline-size: 270px;
+  inline-size: 100%;
+  max-inline-size: 100%;
   box-sizing: border-box;
   flex-direction: column;
   align-items: stretch;
@@ -66,6 +54,7 @@
 
 .quick-drawer__row {
   display: flex;
+  inline-size: 100%;
   min-inline-size: 0;
   align-items: center;
   gap: 4px;
@@ -76,20 +65,21 @@
 }
 
 .quick-drawer__row--item .quick-drawer__item {
-  flex: 1 1 auto;
+  inline-size: 100%;
+  flex: none;
   min-inline-size: 0;
   justify-content: flex-start;
 }
 
 .quick-drawer__row--icons {
   flex-wrap: wrap;
-  align-self: start;
+  align-self: stretch;
 }
 
 .quick-drawer__empty {
   display: flex;
   inline-size: 100%;
-  min-inline-size: 242px;
+  min-inline-size: 0;
   block-size: 36px;
   align-items: center;
   border: 1px solid var(--border-primary);
@@ -145,7 +135,7 @@
 .quick-drawer__item--display-icon-text,
 .quick-drawer__item--display-text {
   display: flex;
-  inline-size: auto;
+  inline-size: 100%;
   min-inline-size: 0;
   justify-content: flex-start;
 }
@@ -184,6 +174,9 @@
   block-size: 20px;
   place-items: center;
   background: transparent;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
 }
 
 .quick-drawer__handle span {
@@ -192,6 +185,7 @@
   border-radius: 999px;
   background: var(--accent-primary);
   box-shadow: 0 0 7px var(--accent-primary);
+  opacity: 1;
 }
 
 .quick-drawer--edge-hidden .quick-drawer__handle {
@@ -199,7 +193,7 @@
 }
 
 .quick-drawer--edge-hidden .quick-drawer__handle span {
-  opacity: 0;
+  display: none;
 }
 
 .quick-drawer__menu {

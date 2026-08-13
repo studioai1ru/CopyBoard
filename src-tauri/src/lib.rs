@@ -42,8 +42,9 @@ const QUICK_ACCESS_LABEL: &str = "quick-access";
 const QUICK_ACCESS_DEFAULT_WIDTH: u64 = 278;
 const QUICK_ACCESS_DEFAULT_HEIGHT: u64 = 64;
 const QUICK_ACCESS_HIT_AREA_HEIGHT: f64 = 20.0;
-const QUICK_ACCESS_EDITOR_WIDTH: f64 = 360.0;
-const QUICK_ACCESS_EDITOR_HEIGHT: f64 = 420.0;
+const QUICK_ACCESS_EDITOR_WIDTH: f64 = 820.0;
+const QUICK_ACCESS_EDITOR_HEIGHT: f64 = 620.0;
+const QUICK_ACCESS_POSITION_SCALE: u64 = 1_000_000;
 
 struct ClipboardRuntime {
     last_capture_key: Arc<Mutex<String>>,
@@ -70,6 +71,7 @@ struct RuntimeState {
     quick_access_animation: Arc<AtomicU64>,
     quick_access_width: AtomicU64,
     quick_access_height: AtomicU64,
+    quick_access_position: AtomicU64,
     quick_access_open: AtomicBool,
     quick_access_ready: AtomicBool,
     quick_access_editing: AtomicBool,
@@ -117,6 +119,7 @@ fn defaults() -> Value {
         "showTrayNotifications": true,
         "quickAccessEnabled": true,
         "showQuickAccessEdge": true,
+        "quickAccessPosition": 0.5,
         "quickAccessHotkey": "Ctrl+Shift+V",
         "clearAllHotkey": "Ctrl+Shift+Delete",
         "viewMode": "grid",
@@ -124,13 +127,6 @@ fn defaults() -> Value {
         "maxItems": 100,
         "autoDelete": "never"
     })
-}
-
-fn now_millis() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as i64
 }
 
 fn merge_settings(base: &mut Value, partial: Value) {
@@ -195,54 +191,29 @@ fn setting_bool(settings: &Value, key: &str, fallback: bool) -> bool {
         .unwrap_or(fallback)
 }
 
+fn setting_f64(settings: &Value, key: &str, fallback: f64) -> f64 {
+    settings
+        .get(key)
+        .and_then(Value::as_f64)
+        .unwrap_or(fallback)
+}
+
+fn quick_access_position_value(state: &RuntimeState) -> f64 {
+    state.quick_access_position.load(Ordering::SeqCst) as f64 / QUICK_ACCESS_POSITION_SCALE as f64
+}
+
+fn store_quick_access_position(state: &RuntimeState, position: f64) {
+    state.quick_access_position.store(
+        (position.clamp(0.0, 1.0) * QUICK_ACCESS_POSITION_SCALE as f64).round() as u64,
+        Ordering::SeqCst,
+    );
+}
+
 fn load_settings_file(data_dir: &Path) -> Value {
     let mut settings = defaults();
     let stored = load_json(&data_dir.join(SETTINGS_FILE), json!({}));
     merge_settings(&mut settings, stored);
     settings
-}
-
-fn migrate_legacy_data(data_dir: &Path) {
-    if fs::create_dir_all(data_dir).is_err() {
-        return;
-    }
-    let Some(parent) = data_dir.parent() else {
-        return;
-    };
-
-    let legacy_candidates = [
-        parent.join("CopyBoard"),
-        parent.join("copyboard"),
-        parent.join("com.copyboard.app"),
-    ];
-    for legacy in legacy_candidates {
-        if legacy == data_dir || !legacy.is_dir() {
-            continue;
-        }
-        for name in [SETTINGS_FILE, HISTORY_FILE, FAVORITES_FILE] {
-            let source = legacy.join(name);
-            let destination = data_dir.join(name);
-            if source.is_file() && !destination.exists() {
-                let _ = fs::copy(source, destination);
-            }
-        }
-
-        let source_images = legacy.join(IMAGES_DIR);
-        let destination_images = data_dir.join(IMAGES_DIR);
-        if source_images.is_dir() {
-            let _ = fs::create_dir_all(&destination_images);
-            if let Ok(entries) = fs::read_dir(source_images) {
-                for entry in entries.flatten() {
-                    let source = entry.path();
-                    let destination = destination_images.join(entry.file_name());
-                    if source.is_file() && !destination.exists() {
-                        let _ = fs::copy(source, destination);
-                    }
-                }
-            }
-        }
-        break;
-    }
 }
 
 fn safe_image_name(raw: &str) -> String {
@@ -375,7 +346,10 @@ fn capture_preview(kind: &str, content: &str) -> String {
     preview
 }
 
-fn persist_clipboard_capture<R: Runtime>(app: &AppHandle<R>, capture: &ClipboardCapture) {
+fn persist_clipboard_capture<R: Runtime>(
+    app: &AppHandle<R>,
+    capture: &ClipboardCapture,
+) -> Result<(), String> {
     let state = app.state::<RuntimeState>();
     let (max_items, retention_ms) = state
         .settings
@@ -420,9 +394,7 @@ fn persist_clipboard_capture<R: Runtime>(app: &AppHandle<R>, capture: &Clipboard
     });
     items.insert(0, entry);
     items.truncate(max_items);
-    if let Err(error) = history_save_unlocked(&state, &items) {
-        eprintln!("Failed to persist clipboard capture: {error}");
-    }
+    history_save_unlocked(&state, &items)
 }
 
 fn record_and_emit_capture<R: Runtime>(
@@ -436,16 +408,15 @@ fn record_and_emit_capture<R: Runtime>(
         content,
         timestamp: Utc::now().to_rfc3339(),
     };
-    let _ = app.emit(
-        "copyboard:clip.capture",
-        json!({
-            "type": capture.kind,
-            "content": capture.content,
-            "timestamp": capture.timestamp,
-            "force": force,
-        }),
-    );
-    persist_clipboard_capture(app, &capture);
+    if let Err(error) = persist_clipboard_capture(app, &capture) {
+        eprintln!("Failed to persist clipboard capture: {error}");
+        return;
+    }
+
+    // Keep cross-window updates small and deterministic. Images can be many
+    // megabytes, so renderers reload the authoritative history only after the
+    // native write has completed instead of receiving a base64 payload event.
+    let _ = app.emit("copyboard:history.changed", json!({ "force": force }));
 }
 
 fn image_fingerprint(image: &ImageData<'_>) -> String {
@@ -562,8 +533,7 @@ fn capture_clipboard_change(app: &AppHandle) {
         if let Ok(text) = clipboard.get_text() {
             if !text.trim().is_empty() {
                 let key = format!("text::{text}");
-                if capture_changed(last_capture_key, &key)
-                    && text.chars().count() <= MAX_TEXT_CHARS
+                if capture_changed(last_capture_key, &key) && text.chars().count() <= MAX_TEXT_CHARS
                 {
                     record_and_emit_capture(app, "text", text, false);
                 }
@@ -1029,26 +999,24 @@ fn quick_access_geometry(
     let logical_height = state.quick_access_height.load(Ordering::SeqCst) as f64;
     let width = (logical_width * scale).round().max(1.0) as u32;
     let height = (logical_height * scale).round().max(1.0) as u32;
-    let edge_height = (QUICK_ACCESS_HIT_AREA_HEIGHT * scale)
-        .round()
-        .max(1.0) as i32;
+    let edge_height = (QUICK_ACCESS_HIT_AREA_HEIGHT * scale).round().max(1.0) as i32;
     let position = monitor.position();
     let size = monitor.size();
-    let x = position.x + ((size.width as i64 - width as i64) / 2) as i32;
+    let available_width = size.width.saturating_sub(width);
+    let x =
+        position.x + (available_width as f64 * quick_access_position_value(state)).round() as i32;
     let open_y = position.y;
     let closed_y = open_y - height as i32 + edge_height;
     Ok((x, open_y, closed_y, width, height))
 }
 
-fn set_quick_access_size(state: &RuntimeState, width: f64, height: f64) {
-    state.quick_access_width.store(
-        width.round().clamp(52.0, QUICK_ACCESS_EDITOR_WIDTH) as u64,
-        Ordering::SeqCst,
-    );
-    state.quick_access_height.store(
-        height.round().clamp(44.0, 420.0) as u64,
-        Ordering::SeqCst,
-    );
+fn set_quick_access_size(state: &RuntimeState, _width: f64, height: f64) {
+    state
+        .quick_access_width
+        .store(QUICK_ACCESS_DEFAULT_WIDTH, Ordering::SeqCst);
+    state
+        .quick_access_height
+        .store(height.round().clamp(44.0, 420.0) as u64, Ordering::SeqCst);
 }
 
 fn position_quick_access(
@@ -1149,6 +1117,11 @@ fn quick_access_set_edge_visible(
 }
 
 #[tauri::command]
+fn quick_access_get_edge_visible(state: State<'_, RuntimeState>) -> bool {
+    state.quick_access_edge_visible.load(Ordering::SeqCst)
+}
+
+#[tauri::command]
 fn quick_access_set_enabled(
     app: AppHandle,
     state: State<'_, RuntimeState>,
@@ -1176,13 +1149,31 @@ fn quick_access_set_editing(
     state.quick_access_editing.store(editing, Ordering::SeqCst);
     state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
     if editing {
-        set_quick_access_size(
-            &state,
-            QUICK_ACCESS_EDITOR_WIDTH,
-            QUICK_ACCESS_EDITOR_HEIGHT,
-        );
         state.quick_access_open.store(true, Ordering::SeqCst);
-        position_quick_access(&window, &state, true)?;
+        let monitor = window
+            .current_monitor()
+            .map_err(|error| error.to_string())?
+            .or(window
+                .primary_monitor()
+                .map_err(|error| error.to_string())?)
+            .ok_or_else(|| "Editor monitor is unavailable".to_string())?;
+        let scale = monitor.scale_factor();
+        let monitor_position = monitor.position();
+        let monitor_size = monitor.size();
+        let width = (QUICK_ACCESS_EDITOR_WIDTH * scale)
+            .round()
+            .min(monitor_size.width as f64) as u32;
+        let height = (QUICK_ACCESS_EDITOR_HEIGHT * scale)
+            .round()
+            .min(monitor_size.height as f64) as u32;
+        let x = monitor_position.x + ((monitor_size.width - width) / 2) as i32;
+        let y = monitor_position.y + ((monitor_size.height - height) / 2) as i32;
+        window
+            .set_size(Size::Physical(PhysicalSize::new(width, height)))
+            .map_err(|error| error.to_string())?;
+        window
+            .set_position(Position::Physical(PhysicalPosition::new(x, y)))
+            .map_err(|error| error.to_string())?;
         window
             .set_focusable(true)
             .map_err(|error| error.to_string())?;
@@ -1192,7 +1183,61 @@ fn quick_access_set_editing(
         window
             .set_focusable(false)
             .map_err(|error| error.to_string())?;
+        position_quick_access(&window, &state, true)?;
     }
+    Ok(true)
+}
+
+#[tauri::command]
+fn quick_access_move_horizontal(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    delta_x: f64,
+) -> Result<bool, String> {
+    if state.quick_access_editing.load(Ordering::SeqCst) || !delta_x.is_finite() {
+        return Ok(false);
+    }
+    let window = app
+        .get_webview_window(QUICK_ACCESS_LABEL)
+        .ok_or_else(|| "Quick access window is unavailable".to_string())?;
+    let monitor = window
+        .current_monitor()
+        .map_err(|error| error.to_string())?
+        .or(window
+            .primary_monitor()
+            .map_err(|error| error.to_string())?)
+        .ok_or_else(|| "Quick access monitor is unavailable".to_string())?;
+    let scale = monitor.scale_factor();
+    let monitor_position = monitor.position();
+    let monitor_size = monitor.size();
+    let window_size = window.outer_size().map_err(|error| error.to_string())?;
+    let current = window.outer_position().map_err(|error| error.to_string())?;
+    let min_x = monitor_position.x;
+    let max_x = min_x + monitor_size.width.saturating_sub(window_size.width) as i32;
+    let next_x = (current.x as f64 + delta_x * scale)
+        .round()
+        .clamp(min_x as f64, max_x as f64) as i32;
+    window
+        .set_position(Position::Physical(PhysicalPosition::new(next_x, current.y)))
+        .map_err(|error| error.to_string())?;
+
+    let available_width = monitor_size.width.saturating_sub(window_size.width);
+    let position = if available_width == 0 {
+        0.5
+    } else {
+        (next_x - min_x) as f64 / available_width as f64
+    };
+    store_quick_access_position(&state, position);
+    Ok(true)
+}
+
+#[tauri::command]
+fn quick_access_commit_position(state: State<'_, RuntimeState>) -> Result<bool, String> {
+    save_setting(
+        &state,
+        "quickAccessPosition",
+        json!(quick_access_position_value(&state)),
+    )?;
     Ok(true)
 }
 
@@ -1220,10 +1265,7 @@ fn quick_access_set_open(
         .map_err(|error| error.to_string())?;
 
     let target_y = if open { open_y } else { closed_y };
-    let generation = state
-        .quick_access_animation
-        .fetch_add(1, Ordering::SeqCst)
-        + 1;
+    let generation = state.quick_access_animation.fetch_add(1, Ordering::SeqCst) + 1;
     let animation = Arc::clone(&state.quick_access_animation);
 
     if reduce_motion.unwrap_or(false) {
@@ -1478,13 +1520,18 @@ fn history_load(state: State<'_, RuntimeState>) -> Vec<Value> {
 }
 
 #[tauri::command]
-fn history_save(state: State<'_, RuntimeState>, items: Vec<Value>) -> Result<bool, String> {
+fn history_save(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    items: Vec<Value>,
+) -> Result<bool, String> {
     history_save_inner(&state, &items)?;
+    let _ = app.emit("copyboard:history.changed", ());
     Ok(true)
 }
 
 #[tauri::command]
-fn history_clear(state: State<'_, RuntimeState>) -> Result<bool, String> {
+fn history_clear(app: AppHandle, state: State<'_, RuntimeState>) -> Result<bool, String> {
     let _guard = state.history_io.lock().ok();
     let path = history_path(&state);
     if path.exists() {
@@ -1499,20 +1546,8 @@ fn history_clear(state: State<'_, RuntimeState>) -> Result<bool, String> {
             }
         }
     }
+    let _ = app.emit("copyboard:history.changed", ());
     Ok(true)
-}
-
-#[tauri::command]
-fn history_migrate(
-    state: State<'_, RuntimeState>,
-    items: Vec<Value>,
-) -> Result<Vec<Value>, String> {
-    let existing = history_load_inner(&state);
-    if !existing.is_empty() || items.is_empty() {
-        return Ok(existing);
-    }
-    history_save_inner(&state, &items)?;
-    Ok(items)
 }
 
 #[tauri::command]
@@ -1530,7 +1565,10 @@ fn favorites_save(
     state: State<'_, RuntimeState>,
     items: Vec<Value>,
 ) -> Result<Vec<Value>, String> {
-    let _guard = state.favorites_io.lock().map_err(|error| error.to_string())?;
+    let _guard = state
+        .favorites_io
+        .lock()
+        .map_err(|error| error.to_string())?;
     save_json(&favorites_path(&state), &Value::Array(items.clone()))?;
     rebuild_tray(&app)?;
     let _ = app.emit("copyboard:favorites.changed", items.clone());
@@ -1548,7 +1586,10 @@ fn favorites_update(
         .and_then(Value::as_str)
         .filter(|id| !id.is_empty())
         .ok_or_else(|| "Favorite id is required".to_string())?;
-    let _guard = state.favorites_io.lock().map_err(|error| error.to_string())?;
+    let _guard = state
+        .favorites_io
+        .lock()
+        .map_err(|error| error.to_string())?;
     let mut items = load_json(&favorites_path(&state), json!([]))
         .as_array()
         .cloned()
@@ -1570,7 +1611,10 @@ fn favorites_delete(
     state: State<'_, RuntimeState>,
     id: String,
 ) -> Result<Vec<Value>, String> {
-    let _guard = state.favorites_io.lock().map_err(|error| error.to_string())?;
+    let _guard = state
+        .favorites_io
+        .lock()
+        .map_err(|error| error.to_string())?;
     let mut items = load_json(&favorites_path(&state), json!([]))
         .as_array()
         .cloned()
@@ -1598,7 +1642,6 @@ pub fn run() {
         )
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
-            migrate_legacy_data(&data_dir);
             let settings = load_settings_file(&data_dir);
             let launch_hidden = !cfg!(debug_assertions)
                 && (std::env::args().any(|argument| argument == "--hidden")
@@ -1615,6 +1658,11 @@ pub fn run() {
                 quick_access_animation: Arc::new(AtomicU64::new(0)),
                 quick_access_width: AtomicU64::new(QUICK_ACCESS_DEFAULT_WIDTH),
                 quick_access_height: AtomicU64::new(QUICK_ACCESS_DEFAULT_HEIGHT),
+                quick_access_position: AtomicU64::new(
+                    (setting_f64(&settings, "quickAccessPosition", 0.5).clamp(0.0, 1.0)
+                        * QUICK_ACCESS_POSITION_SCALE as f64)
+                        .round() as u64,
+                ),
                 quick_access_open: AtomicBool::new(false),
                 quick_access_ready: AtomicBool::new(false),
                 quick_access_editing: AtomicBool::new(false),
@@ -1651,8 +1699,11 @@ pub fn run() {
             quick_access_ready,
             quick_access_configure,
             quick_access_set_edge_visible,
+            quick_access_get_edge_visible,
             quick_access_set_enabled,
             quick_access_set_editing,
+            quick_access_move_horizontal,
+            quick_access_commit_position,
             quick_access_set_open,
             clip_read_text,
             clip_read_image,
@@ -1675,7 +1726,6 @@ pub fn run() {
             history_load,
             history_save,
             history_clear,
-            history_migrate,
             favorites_load,
             favorites_save,
             favorites_update,
@@ -1691,30 +1741,30 @@ pub fn run() {
 
             match event {
                 WindowEvent::CloseRequested { api, .. } => {
-                api.prevent_close();
-                let app = window.app_handle();
-                let state = app.state::<RuntimeState>();
-                if state.quitting.load(Ordering::SeqCst) {
-                    app.exit(0);
-                    return;
-                }
-                let close_mode = state
-                    .settings
-                    .lock()
-                    .map(|settings| setting_string(&settings, "closeBehavior", "minimize"))
-                    .unwrap_or_else(|_| "minimize".into());
-                if close_mode == "minimize" {
-                    let _ = window.hide();
-                } else {
-                    close_application(app, &state);
-                }
+                    api.prevent_close();
+                    let app = window.app_handle();
+                    let state = app.state::<RuntimeState>();
+                    if state.quitting.load(Ordering::SeqCst) {
+                        app.exit(0);
+                        return;
+                    }
+                    let close_mode = state
+                        .settings
+                        .lock()
+                        .map(|settings| setting_string(&settings, "closeBehavior", "minimize"))
+                        .unwrap_or_else(|_| "minimize".into());
+                    if close_mode == "minimize" {
+                        let _ = window.hide();
+                    } else {
+                        close_application(app, &state);
+                    }
                 }
                 WindowEvent::Resized(_) => {
-                if let Ok(maximized) = window.is_maximized() {
-                    let _ = window
-                        .app_handle()
-                        .emit("copyboard:window.maximized", maximized);
-                }
+                    if let Ok(maximized) = window.is_maximized() {
+                        let _ = window
+                            .app_handle()
+                            .emit("copyboard:window.maximized", maximized);
+                    }
                 }
                 _ => {}
             }

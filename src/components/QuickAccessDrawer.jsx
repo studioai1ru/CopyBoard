@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { FiCheck } from 'react-icons/fi';
 import { useFrequentItems } from '../hooks/useFrequentItems';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { handleGlobalEscape } from '../utils/escapeStack';
 import { favoriteLabel } from '../utils/clipboardUtils';
 import { desktop } from '../utils/desktop';
 import {
@@ -40,15 +41,13 @@ function QuickAccessDrawer({ edgeVisible }) {
   const closeTimerRef = useRef(null);
   const feedbackTimerRef = useRef(null);
   const openingRef = useRef(false);
+  const editingRef = useRef(false);
+  const dragRef = useRef(null);
+  const dragFrameRef = useRef(null);
+  const dragQueueRef = useRef(Promise.resolve());
   const readyRef = useRef(false);
   const lastSizeRef = useRef('');
   const rows = useMemo(() => groupQuickAccessItems(items), [items]);
-
-  const closeMenu = useCallback(() => {
-    setMenu(null);
-  }, []);
-
-  useEscapeKey(Boolean(menu), closeMenu);
 
   useEffect(() => {
     if (!menu) return undefined;
@@ -70,11 +69,13 @@ function QuickAccessDrawer({ edgeVisible }) {
   }, [menu]);
 
   const measureAndConfigure = useCallback(async () => {
+    if (editingRef.current) return false;
     const panel = panelRef.current;
     if (!panel) return false;
 
     const bounds = panel.getBoundingClientRect();
     const size = clampQuickAccessSize(bounds.width, bounds.height);
+    if (menu) size.height = Math.max(size.height, 96);
     const fingerprint = `${size.width}x${size.height}`;
     const api = desktop();
 
@@ -90,7 +91,13 @@ function QuickAccessDrawer({ edgeVisible }) {
       lastSizeRef.current = fingerprint;
     }
     return true;
+  }, [menu]);
+
+  const closeMenu = useCallback(() => {
+    setMenu(null);
   }, []);
+
+  useEscapeKey(Boolean(menu), closeMenu);
 
   const moveDrawer = useCallback((open) => {
     window.clearTimeout(closeTimerRef.current);
@@ -98,9 +105,21 @@ function QuickAccessDrawer({ edgeVisible }) {
     return desktop()?.quickAccess?.setOpen?.(open, reduceMotion);
   }, []);
 
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      if (handleGlobalEscape(event)) return;
+      event.preventDefault();
+      moveDrawer(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [moveDrawer]);
+
   const closeEditor = useCallback(async () => {
     setEditingItem(null);
     await desktop()?.quickAccess?.setEditing?.(false);
+    editingRef.current = false;
     await afterLayout();
     lastSizeRef.current = '';
     await measureAndConfigure();
@@ -108,9 +127,19 @@ function QuickAccessDrawer({ edgeVisible }) {
 
   const openEditor = useCallback(async (item) => {
     window.clearTimeout(closeTimerRef.current);
+    editingRef.current = true;
     setMenu(null);
-    await desktop()?.quickAccess?.setEditing?.(true);
-    setEditingItem(item);
+    try {
+      const opened = await desktop()?.quickAccess?.setEditing?.(true);
+      if (opened === false) {
+        editingRef.current = false;
+        return;
+      }
+      setEditingItem(item);
+    } catch (error) {
+      editingRef.current = false;
+      console.error('Favorite editor failed to open:', error);
+    }
   }, []);
 
   const requestOpen = useCallback(async () => {
@@ -140,6 +169,7 @@ function QuickAccessDrawer({ edgeVisible }) {
       offRequest?.();
       window.clearTimeout(closeTimerRef.current);
       window.clearTimeout(feedbackTimerRef.current);
+      if (dragFrameRef.current !== null) cancelAnimationFrame(dragFrameRef.current);
     };
   }, [requestOpen]);
 
@@ -152,7 +182,7 @@ function QuickAccessDrawer({ edgeVisible }) {
     const observer = new ResizeObserver(() => measureAndConfigure());
     observer.observe(panel);
     return () => observer.disconnect();
-  }, [items, loaded, measureAndConfigure]);
+  }, [items, loaded, measureAndConfigure, menu]);
 
   const closeSoon = useCallback(() => {
     if (menu || editingItem) return;
@@ -172,6 +202,51 @@ function QuickAccessDrawer({ edgeVisible }) {
     else return;
     event.preventDefault();
     buttons[next]?.focus();
+  };
+
+  const flushHorizontalDrag = useCallback(() => {
+    dragFrameRef.current = null;
+    const drag = dragRef.current;
+    if (!drag || drag.pending === 0) return;
+    const delta = drag.pending;
+    drag.pending = 0;
+    dragQueueRef.current = dragQueueRef.current
+      .then(() => desktop()?.quickAccess?.moveHorizontal?.(delta))
+      .catch((error) => console.error('Drawer move failed:', error));
+  }, []);
+
+  const startHorizontalDrag = (event) => {
+    if (event.button !== 0 || editingItem) return;
+    window.clearTimeout(closeTimerRef.current);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      lastX: event.screenX,
+      pending: 0,
+    };
+  };
+
+  const moveHorizontalDrag = (event) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    drag.pending += event.screenX - drag.lastX;
+    drag.lastX = event.screenX;
+    if (dragFrameRef.current === null) {
+      dragFrameRef.current = requestAnimationFrame(flushHorizontalDrag);
+    }
+  };
+
+  const finishHorizontalDrag = async (event) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (dragFrameRef.current !== null) {
+      cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = null;
+    }
+    flushHorizontalDrag();
+    dragRef.current = null;
+    await dragQueueRef.current;
+    await desktop()?.quickAccess?.commitPosition?.();
   };
 
   const copyItem = async (item) => {
@@ -198,11 +273,10 @@ function QuickAccessDrawer({ edgeVisible }) {
     event.preventDefault();
     event.stopPropagation();
     window.clearTimeout(closeTimerRef.current);
-    const panel = panelRef.current?.getBoundingClientRect();
     const menuWidth = 148;
     const menuHeight = 84;
-    const maxX = (panel?.width || window.innerWidth) - menuWidth - 4;
-    const maxY = (panel?.height || window.innerHeight) - menuHeight - 4;
+    const maxX = window.innerWidth - menuWidth - 4;
+    const maxY = Math.max(window.innerHeight, 96) - menuHeight - 4;
     setMenu({
       item,
       x: Math.max(4, Math.min(event.clientX, maxX)),
@@ -261,15 +335,6 @@ function QuickAccessDrawer({ edgeVisible }) {
         inert={editingItem ? true : undefined}
         onPointerEnter={requestOpen}
         onPointerLeave={closeSoon}
-        onKeyDown={(event) => {
-          if (event.key !== 'Escape') return;
-          event.preventDefault();
-          if (menu) {
-            setMenu(null);
-            return;
-          }
-          moveDrawer(false);
-        }}
       >
         <div className="quick-drawer__items">
           {loaded && rows.length === 0 && (
@@ -284,7 +349,16 @@ function QuickAccessDrawer({ edgeVisible }) {
             </div>
           ))}
         </div>
-        <div className="quick-drawer__handle" aria-hidden="true"><span /></div>
+        <div
+          className="quick-drawer__handle"
+          aria-hidden="true"
+          onPointerDown={startHorizontalDrag}
+          onPointerMove={moveHorizontalDrag}
+          onPointerUp={finishHorizontalDrag}
+          onPointerCancel={finishHorizontalDrag}
+        >
+          <span />
+        </div>
         <span className="sr-only" aria-live="polite">
           {copiedId ? t('quickAccess.copied') : ''}
         </span>
@@ -353,9 +427,17 @@ export default function QuickAccessSurface() {
         setLanguage(event.newValue || 'ru');
       }
     };
+    const syncEdge = async () => {
+      try {
+        const visible = await desktop()?.quickAccess?.getEdgeVisible?.();
+        if (active && typeof visible === 'boolean') setEdgeVisible(visible);
+      } catch (error) {
+        console.error('Drawer edge visibility synchronization failed:', error);
+      }
+    };
     const offEdge = desktop()?.quickAccess?.onEdgeVisibleChange?.((visible) => {
       setEdgeVisible(visible !== false);
-    });
+    }, syncEdge);
     window.addEventListener('storage', syncLanguage);
     return () => {
       active = false;

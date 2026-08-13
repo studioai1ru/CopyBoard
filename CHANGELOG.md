@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- The drawer can now be dragged horizontally by its handle and remembers its position along the top of the screen.
+
+### Fixed
+
+- Native clipboard changes now refresh the visible history immediately through a lightweight post-save event, including screenshots and other images.
+- Clean installations no longer restore history, favorites, or settings from the legacy Electron data directory.
+- The drawer now keeps a fixed width for every favorite, and its right-click menu is no longer clipped by the window bounds.
+- Editing from the drawer now uses the same full-size form as the main window, centered on screen, with working Escape dismissal.
+- The drawer-edge toggle now updates the visible handle immediately and consistently without restarting the application.
+
 ## [1.0.13] - 2026-08-13
 
 ### Fixed

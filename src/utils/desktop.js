@@ -44,9 +44,6 @@ const api = {
     writeFiles: (files, recordHistory = false) => (
       invoke('clip_write_files', { files, recordHistory })
     ),
-    onCapture: (callback, onReady) => (
-      subscribe('copyboard:clip.capture', callback, onReady)
-    ),
   },
   settings: {
     get: () => invoke('settings_get'),
@@ -69,7 +66,9 @@ const api = {
     save: (items) => invoke('history_save', { items }),
     saveDebounced: (items) => invoke('history_save', { items }),
     clear: () => invoke('history_clear'),
-    migrate: (items) => invoke('history_migrate', { items }),
+    onChanged: (callback, onReady) => (
+      subscribe('copyboard:history.changed', callback, onReady)
+    ),
     onWipeShortcut: (callback) => subscribe('copyboard:history.wipeShortcut', callback),
   },
   favorites: {
@@ -84,15 +83,18 @@ const api = {
     configure: (size) => invoke('quick_access_configure', size),
     setEnabled: (enabled) => invoke('quick_access_set_enabled', { enabled }),
     setEdgeVisible: (visible) => invoke('quick_access_set_edge_visible', { visible }),
+    getEdgeVisible: () => invoke('quick_access_get_edge_visible'),
     setEditing: (editing) => invoke('quick_access_set_editing', { editing }),
+    moveHorizontal: (deltaX) => invoke('quick_access_move_horizontal', { deltaX }),
+    commitPosition: () => invoke('quick_access_commit_position'),
     setOpen: (open, reduceMotion = false) => (
       invoke('quick_access_set_open', { open, reduceMotion })
     ),
     onOpenRequested: (callback) => (
       subscribe('copyboard:quickAccess.openRequested', callback)
     ),
-    onEdgeVisibleChange: (callback) => (
-      subscribe('copyboard:quickAccess.edgeVisible', callback)
+    onEdgeVisibleChange: (callback, onReady) => (
+      subscribe('copyboard:quickAccess.edgeVisible', callback, onReady)
     ),
   },
   ui: {
