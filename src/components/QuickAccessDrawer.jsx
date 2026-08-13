@@ -26,6 +26,7 @@ function QuickAccessDrawer() {
   const panelRef = useRef(null);
   const closeTimerRef = useRef(null);
   const feedbackTimerRef = useRef(null);
+  const openingRef = useRef(false);
   const readyRef = useRef(false);
   const lastSizeRef = useRef('');
   const rows = useMemo(() => groupQuickAccessItems(items), [items]);
@@ -60,15 +61,16 @@ function QuickAccessDrawer() {
   }, []);
 
   const requestOpen = useCallback(async () => {
-    const freshItems = await refreshItems();
-    if (freshItems.length === 0) {
-      await moveDrawer(false);
-      return;
+    if (openingRef.current) return;
+    openingRef.current = true;
+    try {
+      await refreshItems();
+      await afterLayout();
+      await measureAndConfigure();
+      await moveDrawer(true);
+    } finally {
+      openingRef.current = false;
     }
-
-    await afterLayout();
-    await measureAndConfigure();
-    await moveDrawer(true);
   }, [measureAndConfigure, moveDrawer, refreshItems]);
 
   useEffect(() => {
@@ -155,6 +157,7 @@ function QuickAccessDrawer() {
       ref={panelRef}
       className="quick-drawer"
       aria-label={t('quickAccess.title')}
+      onPointerEnter={requestOpen}
       onPointerLeave={closeSoon}
       onKeyDown={(event) => {
         if (event.key !== 'Escape') return;
@@ -163,6 +166,9 @@ function QuickAccessDrawer() {
       }}
     >
       <div className="quick-drawer__items">
+        {loaded && rows.length === 0 && (
+          <p className="quick-drawer__empty">{t('quickAccess.empty')}</p>
+        )}
         {rows.map((row) => (
           <div
             key={`${row.type}-${row.items.map((item) => item.id).join('-')}`}
@@ -172,6 +178,7 @@ function QuickAccessDrawer() {
           </div>
         ))}
       </div>
+      <div className="quick-drawer__handle" aria-hidden="true"><span /></div>
       <span className="sr-only" aria-live="polite">
         {copiedId ? t('quickAccess.copied') : ''}
       </span>

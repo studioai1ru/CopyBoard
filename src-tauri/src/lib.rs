@@ -40,7 +40,7 @@ const QUICK_ACCESS_LABEL: &str = "quick-access";
 const QUICK_ACCESS_DEFAULT_WIDTH: u64 = 266;
 const QUICK_ACCESS_DEFAULT_HEIGHT: u64 = 64;
 const QUICK_ACCESS_HOT_ZONE_HEIGHT: f64 = 3.0;
-const QUICK_ACCESS_VISIBLE_EDGE_HEIGHT: f64 = 6.0;
+const QUICK_ACCESS_VISIBLE_EDGE_HEIGHT: f64 = 8.0;
 const QUICK_ACCESS_POLL_MS: u64 = 80;
 
 struct ClipboardRuntime {
@@ -1338,9 +1338,7 @@ fn favorites_save(
 ) -> Result<Vec<Value>, String> {
     save_json(&favorites_path(&state), &Value::Array(items.clone()))?;
     rebuild_tray(&app)?;
-    if let Some(window) = app.get_webview_window(QUICK_ACCESS_LABEL) {
-        let _ = window.emit("copyboard:favorites.changed", items.clone());
-    }
+    let _ = app.emit("copyboard:favorites.changed", items.clone());
     Ok(items)
 }
 

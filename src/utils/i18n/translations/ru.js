@@ -65,7 +65,7 @@ export const ru = {
   quickAccess: {
     title: 'Шаблоны',
     hint: 'Выберите значение — оно скопируется и появится в истории.',
-    empty: 'Добавьте шаблоны в избранное CopyBoard.',
+    empty: 'Здесь будут избранные буферы обмена',
     copy: 'Скопировать «{{label}}»',
     copied: 'Скопировано',
   },
@@ -113,7 +113,7 @@ export const ru = {
     sections: {
       application: 'Приложение',
       appearance: 'Внешний вид',
-      language: 'Язык',
+      language: 'Интерфейс',
       storage: 'Хранилище',
       shortcuts: 'Горячие клавиши',
     },

@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- Renamed the Language settings section to Interface.
+- The top-edge drawer now keeps a blue pull indicator and shows a one-item-sized localized placeholder when favorites are empty.
+
+### Fixed
+
+- Fixed the drawer not opening with an empty favorites list and restored immediate favorite updates without restarting the app.
+- Removed the square window background around the drawer's rounded corners.
+
 ## [1.0.7] - 2026-08-13
 
 ### Added

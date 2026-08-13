@@ -10,6 +10,7 @@
     "frontendDist": "../dist-react"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "main",
@@ -41,6 +42,7 @@
         "alwaysOnTop": true,
         "visibleOnAllWorkspaces": true,
         "skipTaskbar": true,
+        "transparent": true,
         "shadow": false
       }
     ],

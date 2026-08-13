@@ -65,7 +65,7 @@ export const en = {
   quickAccess: {
     title: 'Templates',
     hint: 'Choose a value to copy it and add it to history.',
-    empty: 'Add templates to CopyBoard favorites.',
+    empty: 'Favorites will appear here',
     copy: 'Copy “{{label}}”',
     copied: 'Copied',
   },
@@ -113,7 +113,7 @@ export const en = {
     sections: {
       application: 'Application',
       appearance: 'Appearance',
-      language: 'Language',
+      language: 'Interface',
       storage: 'Storage',
       shortcuts: 'Shortcuts',
     },
