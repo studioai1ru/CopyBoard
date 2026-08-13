@@ -286,7 +286,14 @@ const FrequentPanel = ({ items, onCopy, onEdit, onDelete, onReorder }) => {
         onPointerCancel={finishDrag}
         title={isImageItem(item) ? label : item.content}
       >
-        {showIcon && <FavoriteTypeIcon icon={iconId} content={item.content} size={14} />}
+        {showIcon && (
+          <FavoriteTypeIcon
+            icon={iconId}
+            content={item.content}
+            customIcon={item.customIcon}
+            size={14}
+          />
+        )}
         {showText && <span className="frequent-chip__label">{label}</span>}
       </button>
     );

@@ -17,7 +17,8 @@ import { parseFileReferences } from '../utils/fileReferences';
 import FavoriteTypeIcon from './FavoriteTypeIcon';
 import '../scss/QuickAccessDrawer.scss';
 
-const COPY_FEEDBACK_MS = 240;
+const COPY_FEEDBACK_MS = 520;
+const DRAWER_CLOSE_GRACE_MS = 650;
 
 const afterLayout = () => new Promise((resolve) => {
   requestAnimationFrame(() => requestAnimationFrame(resolve));
@@ -100,6 +101,10 @@ function QuickAccessDrawer({ edgeVisible }) {
     return desktop()?.quickAccess?.setOpen?.(open, reduceMotion);
   }, []);
 
+  const keepDrawerOpen = useCallback(() => {
+    window.clearTimeout(closeTimerRef.current);
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (event) => {
       if (event.key !== 'Escape') return;
@@ -123,6 +128,7 @@ function QuickAccessDrawer({ edgeVisible }) {
   }, [moveDrawer]);
 
   const requestOpen = useCallback(async () => {
+    keepDrawerOpen();
     if (openingRef.current) return;
     openingRef.current = true;
     try {
@@ -133,7 +139,7 @@ function QuickAccessDrawer({ edgeVisible }) {
     } finally {
       openingRef.current = false;
     }
-  }, [measureAndConfigure, moveDrawer, refreshItems]);
+  }, [keepDrawerOpen, measureAndConfigure, moveDrawer, refreshItems]);
 
   useEffect(() => {
     document.body.classList.add('quick-access-surface');
@@ -161,7 +167,10 @@ function QuickAccessDrawer({ edgeVisible }) {
   const closeSoon = useCallback(() => {
     if (menu) return;
     window.clearTimeout(closeTimerRef.current);
-    closeTimerRef.current = window.setTimeout(() => moveDrawer(false), 80);
+    closeTimerRef.current = window.setTimeout(() => {
+      if (menuRef.current || dragRef.current) return;
+      moveDrawer(false);
+    }, DRAWER_CLOSE_GRACE_MS);
   }, [menu, moveDrawer]);
 
   const handleMenuKeyDown = (event) => {
@@ -292,7 +301,14 @@ function QuickAccessDrawer({ edgeVisible }) {
         {showIcon && (
           copied
             ? <FiCheck className="quick-drawer__check" aria-hidden="true" />
-            : <FavoriteTypeIcon icon={icon} content={item.content} size={14} />
+            : (
+              <FavoriteTypeIcon
+                icon={icon}
+                content={item.content}
+                customIcon={item.customIcon}
+                size={14}
+              />
+            )
         )}
         {showText && <span className="quick-drawer__label">{label}</span>}
         {copied && !showIcon && <FiCheck className="quick-drawer__check quick-drawer__check--overlay" aria-hidden="true" />}
@@ -307,6 +323,7 @@ function QuickAccessDrawer({ edgeVisible }) {
         className={`quick-drawer ${edgeVisible ? '' : 'quick-drawer--edge-hidden'}`.trim()}
         aria-label={t('quickAccess.title')}
         onPointerEnter={requestOpen}
+        onPointerMove={keepDrawerOpen}
         onPointerLeave={closeSoon}
       >
         <div className="quick-drawer__items">

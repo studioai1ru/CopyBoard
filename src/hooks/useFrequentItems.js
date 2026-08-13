@@ -9,6 +9,7 @@ import {
   normalizeFavoriteDisplayMode,
   normalizeFavoriteIcon,
 } from '../utils/favoriteIcons';
+import { normalizeCustomFavoriteIcon } from '../utils/customFavoriteIcons';
 import { desktop } from '../utils/desktop';
 
 export function useFrequentItems() {
@@ -94,19 +95,31 @@ export function useFrequentItems() {
     return addItem('', clipboardItem.content, detectFavoriteIcon(clipboardItem.content));
   }, [addItem, items, persist]);
 
-  const updateItem = useCallback(async (id, label, content, icon, displayMode = 'icon-text') => {
+  const updateItem = useCallback(async (
+    id,
+    label,
+    content,
+    icon,
+    displayMode = 'icon-text',
+    customIcon = null,
+  ) => {
     const trimmed = favoriteContentKey(content);
     if (!trimmed) return false;
     const current = items.find((row) => row.id === id);
     if (!current) return false;
+    const normalizedCustomIcon = normalizeCustomFavoriteIcon(customIcon);
+    if (icon === 'custom' && !normalizedCustomIcon) return false;
+    const normalizedIcon = normalizeFavoriteIcon(icon, trimmed, normalizedCustomIcon);
     const updated = {
       ...current,
       label: favoriteLabel(label, trimmed),
       content: trimmed,
-      icon: normalizeFavoriteIcon(icon, trimmed),
+      icon: normalizedIcon,
       displayMode: normalizeFavoriteDisplayMode(displayMode),
       updatedAt: new Date().toISOString(),
     };
+    if (normalizedIcon === 'custom') updated.customIcon = normalizedCustomIcon;
+    else delete updated.customIcon;
     const api = desktop();
     if (api?.favorites?.update) {
       const saved = await api.favorites.update(updated);

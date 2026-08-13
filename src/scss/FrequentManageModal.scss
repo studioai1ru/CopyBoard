@@ -330,6 +330,22 @@ $modal-titlebar-offset: 28px;
       outline: 2px solid var(--accent-primary);
       outline-offset: 1px;
     }
+
+    &--custom {
+      margin-top: 3px;
+      border-top: 1px solid var(--border-primary);
+      border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+      padding-top: 0.55rem;
+
+      > svg {
+        width: 20px;
+        height: 20px;
+        padding: 3px;
+        border-radius: 5px;
+        background: var(--bg-tertiary);
+        color: var(--accent-primary);
+      }
+    }
   }
 
   .primary-btn,
@@ -352,5 +368,103 @@ $modal-titlebar-offset: 28px;
     border: 1px solid var(--border-primary);
     background: transparent;
     color: var(--text-secondary);
+  }
+}
+
+.custom-favorite-icon {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.8rem;
+  overflow-y: auto;
+
+  &__name {
+    flex: none;
+  }
+
+  &__group {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+
+    legend {
+      margin-bottom: var(--spacing-xs);
+      color: var(--text-secondary);
+      font-size: var(--font-size-sm);
+    }
+  }
+
+  &__symbols {
+    display: grid;
+    grid-template-columns: repeat(4, 40px);
+    gap: 6px;
+
+    button {
+      display: grid;
+      width: 40px;
+      height: 40px;
+      place-items: center;
+      border: 1px solid var(--border-primary);
+      border-radius: var(--radius-sm);
+      background: var(--bg-primary);
+      color: var(--text-secondary);
+
+      &:hover {
+        border-color: var(--accent-primary);
+        background: var(--accent-muted);
+        color: var(--text-primary);
+      }
+
+      &.is-active {
+        border-color: var(--accent-primary);
+        background: var(--accent-muted);
+        color: var(--accent-primary);
+        box-shadow: inset 0 0 0 1px var(--accent-primary);
+      }
+
+      svg {
+        width: 18px;
+        height: 18px;
+      }
+    }
+  }
+
+  &__colors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+
+    button {
+      display: grid;
+      width: 32px;
+      height: 32px;
+      place-items: center;
+      border: 3px solid var(--bg-secondary);
+      border-radius: 999px;
+      background: var(--custom-icon-color);
+      color: var(--custom-icon-fg);
+      box-shadow: 0 0 0 1px var(--border-secondary);
+
+      &:hover,
+      &.is-active {
+        box-shadow: 0 0 0 2px var(--accent-primary);
+      }
+
+      svg {
+        width: 14px;
+        height: 14px;
+        stroke-width: 3;
+      }
+    }
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    margin-top: auto;
+    padding-top: var(--spacing-xs);
   }
 }

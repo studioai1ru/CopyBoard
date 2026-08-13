@@ -458,6 +458,51 @@ fn notify_quick_access_editor_item<R: Runtime>(app: &AppHandle<R>, item: &Value)
     }
 }
 
+fn resolved_theme_name(theme: &tauri::Theme) -> &'static str {
+    if matches!(theme, tauri::Theme::Dark) {
+        "dark"
+    } else {
+        "light"
+    }
+}
+
+fn synchronize_window_themes<R: Runtime>(
+    app: &AppHandle<R>,
+    theme: &tauri::Theme,
+    notify_renderers: bool,
+) {
+    let resolved = resolved_theme_name(theme);
+    for label in [QUICK_ACCESS_LABEL, QUICK_ACCESS_EDITOR_LABEL] {
+        let Some(window) = app.get_webview_window(label) else {
+            continue;
+        };
+        #[cfg(target_os = "windows")]
+        {
+            let native_theme = if resolved == "dark" {
+                tauri::Theme::Dark
+            } else {
+                tauri::Theme::Light
+            };
+            let _ = window.set_theme(Some(native_theme));
+        }
+        if notify_renderers {
+            let script = format!(
+                "window.dispatchEvent(new CustomEvent('copyboard:appearance.resolved.native', {{ detail: '{resolved}' }}));"
+            );
+            let _ = window.eval(&script);
+        }
+    }
+
+    if notify_renderers {
+        if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+            let script = format!(
+                "window.dispatchEvent(new CustomEvent('copyboard:appearance.resolved.native', {{ detail: '{resolved}' }}));"
+            );
+            let _ = window.eval(&script);
+        }
+    }
+}
+
 fn image_fingerprint(image: &ImageData<'_>) -> String {
     let bytes = image.bytes.as_ref();
     let mut hasher = DefaultHasher::new();
@@ -1316,8 +1361,8 @@ fn quick_access_set_open(
         .outer_position()
         .map(|position| position.y)
         .unwrap_or(if open { closed_y } else { open_y });
-    let steps = if open { 22 } else { 16 };
-    let frame_ms = 14;
+    let steps = if open { 24 } else { 21 };
+    let frame_ms = 16;
     thread::spawn(move || {
         for step in 1..=steps {
             if animation.load(Ordering::SeqCst) != generation {
@@ -1325,9 +1370,9 @@ fn quick_access_set_open(
             }
             let progress = step as f64 / steps as f64;
             let eased = if open {
-                (progress * std::f64::consts::FRAC_PI_2).sin()
+                1.0 - (1.0 - progress).powi(3)
             } else {
-                progress.powi(3)
+                progress * progress * (3.0 - 2.0 * progress)
             };
             let y = start_y as f64 + (target_y - start_y) as f64 * eased;
             if window
@@ -1473,17 +1518,12 @@ fn settings_get_language(state: State<'_, RuntimeState>) -> String {
 
 #[tauri::command]
 fn settings_get_resolved_theme(app: AppHandle) -> String {
-    app.get_webview_window(MAIN_WINDOW_LABEL)
+    let theme = app
+        .get_webview_window(MAIN_WINDOW_LABEL)
         .and_then(|window| window.theme().ok())
-        .map(|theme| {
-            if matches!(theme, tauri::Theme::Dark) {
-                "dark"
-            } else {
-                "light"
-            }
-        })
-        .unwrap_or("light")
-        .to_string()
+        .unwrap_or(tauri::Theme::Light);
+    synchronize_window_themes(&app, &theme, true);
+    resolved_theme_name(&theme).to_string()
 }
 
 #[tauri::command]
@@ -1730,6 +1770,11 @@ pub fn run() {
                 quick_access_editor_item: Mutex::new(None),
             };
             app.manage(state);
+            if let Some(main_window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+                if let Ok(theme) = main_window.theme() {
+                    synchronize_window_themes(app.handle(), &theme, false);
+                }
+            }
             let runtime = app.state::<RuntimeState>();
             start_clipboard_watcher(app.handle().clone(), &runtime.clipboard)
                 .map_err(std::io::Error::other)?;
@@ -1832,6 +1877,9 @@ pub fn run() {
                             .app_handle()
                             .emit("copyboard:window.maximized", maximized);
                     }
+                }
+                WindowEvent::ThemeChanged(theme) => {
+                    synchronize_window_themes(window.app_handle(), theme, true);
                 }
                 _ => {}
             }

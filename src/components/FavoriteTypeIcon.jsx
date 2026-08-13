@@ -1,10 +1,12 @@
 import { getTypeIconMeta } from '../utils/typeIconMeta';
 import { normalizeFavoriteIcon } from '../utils/favoriteIcons';
+import { getCustomFavoriteIconVisual } from '../utils/customFavoriteIcons';
 
 /** Colored type badge — same palette as history `kind-icon`. */
-const FavoriteTypeIcon = ({ icon, content, size = 14, className = '' }) => {
-  const id = normalizeFavoriteIcon(icon, content);
-  const meta = getTypeIconMeta(id);
+const FavoriteTypeIcon = ({ icon, content, customIcon, size = 14, className = '' }) => {
+  const custom = getCustomFavoriteIconVisual(customIcon);
+  const id = normalizeFavoriteIcon(icon, content, customIcon);
+  const meta = id === 'custom' && custom ? custom : getTypeIconMeta(id);
   const Icon = meta.Icon;
 
   return (
@@ -12,6 +14,8 @@ const FavoriteTypeIcon = ({ icon, content, size = 14, className = '' }) => {
       className={`favorite-type-icon kind-icon kind-icon-${id} ${className}`.trim()}
       style={{ backgroundColor: meta.bg, color: meta.fg }}
       data-icon={id}
+      data-custom-symbol={custom?.symbol}
+      data-custom-color={custom?.color}
       aria-hidden="true"
     >
       <Icon size={size} />

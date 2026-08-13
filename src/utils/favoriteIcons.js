@@ -1,4 +1,8 @@
 import { classifyPayload } from './clipboardUtils';
+import {
+  CUSTOM_FAVORITE_ICON_ID,
+  normalizeCustomFavoriteIcon,
+} from './customFavoriteIcons';
 import { getTypeIconMeta, TYPE_ICON_META } from './typeIconMeta';
 
 /** Small set of favorite chip icons (content stays text/image; icon is metadata). */
@@ -48,13 +52,16 @@ export function detectFavoriteIcon(content) {
   return 'text';
 }
 
-export function normalizeFavoriteIcon(icon, content) {
+export function normalizeFavoriteIcon(icon, content, customIcon = null) {
+  if (icon === CUSTOM_FAVORITE_ICON_ID && normalizeCustomFavoriteIcon(customIcon)) {
+    return CUSTOM_FAVORITE_ICON_ID;
+  }
   if (icon && FAVORITE_ICON_IDS.includes(icon)) return icon;
   return detectFavoriteIcon(content);
 }
 
 export function resolveFavoriteIcon(item) {
-  return normalizeFavoriteIcon(item?.icon, item?.content);
+  return normalizeFavoriteIcon(item?.icon, item?.content, item?.customIcon);
 }
 
 /** Icons the user may pick for this content (images stay image-only). */

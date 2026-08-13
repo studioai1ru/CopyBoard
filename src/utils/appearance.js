@@ -43,6 +43,7 @@ class AppearanceController {
 
   constructor() {
     const syncSystemTheme = () => {
+      this.#resolvedSystemTheme = this.#systemQuery?.matches === true ? 'dark' : 'light';
       if (this.#mode === 'system') this.#applyResolvedTheme();
     };
 
@@ -53,6 +54,16 @@ class AppearanceController {
     }
 
     if (typeof window !== 'undefined') {
+      window.addEventListener('copyboard:appearance.resolved.native', (event) => {
+        if (!['dark', 'light'].includes(event.detail)) return;
+        this.#resolvedSystemTheme = event.detail;
+        try {
+          localStorage.setItem(RESOLVED_PREFERENCE_KEY, event.detail);
+        } catch {
+          // The current document can still apply the native theme without storage.
+        }
+        if (this.#mode === 'system') this.#applyResolvedTheme();
+      });
       window.addEventListener('storage', (event) => {
         if (event.key === PREFERENCE_KEY) {
           this.#mode = normalizeThemeMode(event.newValue);
@@ -66,6 +77,8 @@ class AppearanceController {
         }
       });
     }
+
+    this.#applyResolvedTheme();
   }
 
   #applyResolvedTheme() {

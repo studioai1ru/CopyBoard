@@ -474,9 +474,65 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
     && initialTheme.background === 'rgb(255, 255, 255)'
     && initialTheme.resolvedThemeCalls >= 1,
   `Clean-start drawer ignored the main window theme: ${JSON.stringify(initialTheme)}`);
+  await cdp.evaluate(`window.dispatchEvent(new CustomEvent(
+    'copyboard:appearance.resolved.native', { detail: 'dark' },
+  ))`);
+  await waitFor(
+    () => cdp.evaluate("document.documentElement.dataset.theme === 'dark'"),
+    'native dark theme synchronization',
+  );
+  await cdp.evaluate(`window.dispatchEvent(new CustomEvent(
+    'copyboard:appearance.resolved.native', { detail: 'light' },
+  ))`);
+  await waitFor(
+    () => cdp.evaluate("document.documentElement.dataset.theme === 'light'"),
+    'native light theme synchronization',
+  );
+  const nativeThemeSync = await cdp.evaluate(`({
+    theme: document.documentElement.dataset.theme,
+    stored: localStorage.getItem('copyboard.resolvedAppearance')
+  })`);
+  assert(nativeThemeSync.theme === 'light' && nativeThemeSync.stored === 'light',
+    `Native theme update was not retained: ${JSON.stringify(nativeThemeSync)}`);
 
   const initialWidth = await cdp.evaluate('document.querySelector(".quick-drawer").getBoundingClientRect().width');
   assert(initialWidth === 278, `Initial drawer width is ${initialWidth}, expected 278`);
+
+  const closeCallsBeforeGrace = await cdp.evaluate(`window.__copyboardHarness.state.calls
+    .filter((call) => call.command === 'quick_access_set_open' && call.args.open === false).length`);
+  await cdp.evaluate(`document.querySelector('.quick-drawer').dispatchEvent(new PointerEvent(
+    'pointerout', { bubbles: true, relatedTarget: null },
+  ))`);
+  await new Promise((resolve) => setTimeout(resolve, 180));
+  const prematureCloseCalls = await cdp.evaluate(`window.__copyboardHarness.state.calls
+    .filter((call) => call.command === 'quick_access_set_open' && call.args.open === false).length`);
+  assert(prematureCloseCalls === closeCallsBeforeGrace,
+    `Drawer closed before the pointer could reach its items: ${prematureCloseCalls}`);
+  await cdp.evaluate(`document.querySelector('.quick-drawer').dispatchEvent(new PointerEvent(
+    'pointermove', { bubbles: true },
+  ))`);
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  const cancelledCloseCalls = await cdp.evaluate(`window.__copyboardHarness.state.calls
+    .filter((call) => call.command === 'quick_access_set_open' && call.args.open === false).length`);
+  assert(cancelledCloseCalls === closeCallsBeforeGrace,
+    `Pointer movement did not keep the drawer open: ${cancelledCloseCalls}`);
+  await cdp.evaluate(`document.querySelector('.quick-drawer').dispatchEvent(new PointerEvent(
+    'pointerout', { bubbles: true, relatedTarget: null },
+  ))`);
+  const delayedCloseCalls = await waitFor(async () => {
+    const count = await cdp.evaluate(`window.__copyboardHarness.state.calls
+      .filter((call) => call.command === 'quick_access_set_open' && call.args.open === false).length`);
+    return count > closeCallsBeforeGrace ? count : false;
+  }, 'delayed drawer close');
+  await cdp.evaluate(`document.querySelector('.quick-drawer').dispatchEvent(new PointerEvent(
+    'pointerover', { bubbles: true, relatedTarget: null },
+  ))`);
+  await waitFor(
+    () => cdp.evaluate(`window.__copyboardHarness.state.calls
+      .some((call) => call.command === 'quick_access_set_open' && call.args.open === true)`),
+    'drawer reopen after grace-period test',
+  );
+  const drawerHoverGrace = { prematureCloseCalls, cancelledCloseCalls, delayedCloseCalls };
 
   await cdp.evaluate(`{
     const item = document.querySelector('.quick-drawer__item');
@@ -562,6 +618,85 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
 
   const editorPath = path.join(artifactDir, 'drawer-editor.png');
   await screenshot(cdp, editorPath);
+  await cdp.evaluate('document.querySelector(".frequent-modal__icon-trigger").click()');
+  await waitFor(
+    () => cdp.evaluate('Boolean(document.querySelector(".frequent-modal__icon-option--custom"))'),
+    'custom icon menu option',
+  );
+  await cdp.evaluate('document.querySelector(".frequent-modal__icon-option--custom").click()');
+  await waitFor(
+    () => cdp.evaluate('Boolean(document.querySelector(".custom-favorite-icon"))'),
+    'custom icon form',
+  );
+  const customIconForm = await cdp.evaluate(`(() => {
+    const form = document.querySelector('.custom-favorite-icon');
+    const bounds = form.getBoundingClientRect();
+    const modal = document.querySelector('.frequent-modal').getBoundingClientRect();
+    return {
+      symbols: form.querySelectorAll('.custom-favorite-icon__symbols button').length,
+      colors: form.querySelectorAll('.custom-favorite-icon__colors button').length,
+      insideModal: bounds.left >= modal.left && bounds.right <= modal.right
+        && bounds.top >= modal.top && bounds.bottom <= modal.bottom
+    };
+  })()`);
+  assert(customIconForm.symbols === 16 && customIconForm.colors === 8 && customIconForm.insideModal,
+    `Custom icon form is incomplete or clipped: ${JSON.stringify(customIconForm)}`);
+  const customIconPath = path.join(artifactDir, 'custom-icon-editor.png');
+  await screenshot(cdp, customIconPath);
+  await cdp.evaluate("document.documentElement.dataset.theme = 'dark'");
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  const customIconDarkTheme = await cdp.evaluate(`(() => {
+    const modal = getComputedStyle(document.querySelector('.frequent-modal'));
+    const input = getComputedStyle(document.querySelector('.custom-favorite-icon__name input'));
+    return {
+      modalBackground: modal.backgroundColor,
+      modalColor: modal.color,
+      inputBackground: input.backgroundColor,
+      inputColor: input.color
+    };
+  })()`);
+  assert(customIconDarkTheme.modalBackground === 'rgb(17, 29, 51)'
+    && customIconDarkTheme.inputBackground === 'rgb(12, 20, 37)'
+    && customIconDarkTheme.inputColor === 'rgb(243, 247, 255)',
+  `Custom icon form did not follow dark theme: ${JSON.stringify(customIconDarkTheme)}`);
+  const customIconDarkPath = path.join(artifactDir, 'custom-icon-editor-dark.png');
+  await screenshot(cdp, customIconDarkPath);
+  await cdp.evaluate("document.documentElement.dataset.theme = 'light'");
+  await cdp.evaluate(`(() => {
+    const input = document.querySelector('.custom-favorite-icon__name input');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(input, 'Рабочий значок');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelectorAll('.custom-favorite-icon__symbols button')[11].click();
+    document.querySelectorAll('.custom-favorite-icon__colors button')[6].click();
+  })()`);
+  await cdp.evaluate('document.querySelector(".custom-favorite-icon .primary-btn").click()');
+  await waitFor(
+    () => cdp.evaluate(`document.querySelector('.favorite-type-icon[data-icon="custom"]')
+      ?.dataset.customSymbol === 'work'`),
+    'custom icon preview',
+  );
+  await cdp.evaluate('document.querySelector(".frequent-modal__action-btns .primary-btn").click()');
+  await waitFor(() => cdp.evaluate('document.querySelector(".frequent-modal") === null'), 'custom favorite save');
+  const customIconUpdate = await cdp.evaluate(`window.__copyboardHarness.state.calls
+    .filter((call) => call.command === 'favorites_update').at(-1) || null`);
+  assert(customIconUpdate?.args?.item?.icon === 'custom'
+    && customIconUpdate.args.item.customIcon?.name === 'Рабочий значок'
+    && customIconUpdate.args.item.customIcon?.symbol === 'work'
+    && customIconUpdate.args.item.customIcon?.color === 'emerald',
+  `Custom icon was not saved on the favorite: ${JSON.stringify(customIconUpdate)}`);
+
+  await cdp.evaluate(`(() => {
+    window.__copyboardHarness.setEditorItem(
+      window.__copyboardHarness.state.favorites[0],
+      false,
+    );
+    window.dispatchEvent(new Event('focus'));
+  })()`);
+  await waitFor(
+    () => cdp.evaluate('Boolean(document.querySelector(".frequent-modal"))'),
+    'editor reopen after custom icon save',
+  );
   await cdp.send('Input.dispatchKeyEvent', {
     type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27,
   });
@@ -571,7 +706,7 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
   await waitFor(() => cdp.evaluate('document.querySelector(".frequent-modal") === null'), 'Escape editor dismissal');
   const editorCloseCalls = await cdp.evaluate(`window.__copyboardHarness.state.calls
     .filter((call) => call.command === 'quick_access_close_editor').length`);
-  assert(editorCloseCalls === 1,
+  assert(editorCloseCalls === 2,
     `Independent editor did not close itself: ${editorCloseCalls}`);
 
   await navigate(cdp, `${baseUrl}?surface=quick-access`, '.quick-drawer');
@@ -586,7 +721,7 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
     { id: 'favorite-long', label: 'Очень длинное шаблонное значение, которое не должно менять ширину шторки', content: 'Очень длинное шаблонное значение, которое не должно менять ширину шторки', icon: 'text', displayMode: 'icon-text' },
     { id: 'favorite-file', label: 'CHANGELOG.md', content: JSON.stringify(['C:\\\\Work\\\\CHANGELOG.md']), icon: 'file', displayMode: 'icon-text' },
     { id: 'favorite-image', label: '', content: 'data:image/png;base64,iVBORw0KGgo=', icon: 'image', displayMode: 'icon' },
-    { id: 'favorite-icon-1', label: 'Один', content: 'Один', icon: 'text', displayMode: 'icon' },
+    { id: 'favorite-icon-1', label: 'Один', content: 'Один', icon: 'custom', displayMode: 'icon', customIcon: { name: 'Рабочий значок', symbol: 'work', color: 'emerald' } },
     { id: 'favorite-icon-2', label: 'Два', content: 'Два', icon: 'code', displayMode: 'icon' }
   ])`);
   await waitFor(
@@ -623,6 +758,18 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
     `Favorite block widths are inconsistent: ${JSON.stringify(layout.itemWidths)}`);
   assert(layout.iconRows === 1, 'Icon-only favorites did not share a row');
   assert(!layout.horizontalScroll, 'Drawer has a horizontal scrollbar');
+  const customDrawerIcon = await cdp.evaluate(`(() => {
+    const icon = document.querySelector('.favorite-type-icon[data-icon="custom"]');
+    return icon ? {
+      symbol: icon.dataset.customSymbol,
+      color: icon.dataset.customColor,
+      background: getComputedStyle(icon).backgroundColor
+    } : null;
+  })()`);
+  assert(customDrawerIcon?.symbol === 'work'
+    && customDrawerIcon.color === 'emerald'
+    && customDrawerIcon.background === 'rgb(4, 120, 87)',
+  `Drawer did not render the favorite-specific custom icon: ${JSON.stringify(customDrawerIcon)}`);
   const imageTitle = await cdp.evaluate(`document.querySelector('.quick-drawer__item[aria-label*="Изображение"]')?.getAttribute('title') ?? null`);
   assert(imageTitle === null, `Image favorite exposes encoded content in title: ${imageTitle}`);
 
@@ -734,11 +881,17 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
   return {
     initialWidth,
     initialTheme,
+    nativeThemeSync,
+    drawerHoverGrace,
     menuBounds,
     editor,
+    customIconForm,
+    customIconDarkTheme,
+    customIconUpdate,
     drawerAfterEditorRequest,
     editorCloseCalls,
     layout,
+    customDrawerIcon,
     hiddenEdge,
     visibleEdge,
     darkEdge,
@@ -746,7 +899,7 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
     drag,
     remaining,
     emptyDrawer,
-    screenshots: [editorPath, drawerPath],
+    screenshots: [editorPath, customIconPath, customIconDarkPath, drawerPath],
   };
 }
 

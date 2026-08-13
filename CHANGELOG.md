@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- First-launch System appearance now synchronizes the native theme of every drawer window before it is shown.
+- The drawer now gives the pointer enough time to reach newly revealed templates before closing.
+- Drawer opening and closing now use slower, smoother, interruptible motion while still respecting reduced-motion preferences.
+- Favorite templates can now use a per-item custom icon made from a name, one of 16 symbols, and one of 8 colors.
+
 ## [1.0.17] - 2026-08-14
 
 ### Fixed
