@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- Live clipboard captures now notify the open main window directly after native persistence, so new text and screenshots appear immediately without polling or restarting.
+
 ## [1.0.14] - 2026-08-13
 
 ### Added

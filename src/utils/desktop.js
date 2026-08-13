@@ -21,6 +21,13 @@ function subscribe(channel, callback, onReady) {
   };
 }
 
+function subscribeWindow(channel, callback, onReady) {
+  const handler = (event) => callback(event.detail);
+  window.addEventListener(channel, handler);
+  queueMicrotask(() => onReady?.());
+  return () => window.removeEventListener(channel, handler);
+}
+
 const api = {
   window: {
     ready: () => invoke('window_ready'),
@@ -67,7 +74,7 @@ const api = {
     saveDebounced: (items) => invoke('history_save', { items }),
     clear: () => invoke('history_clear'),
     onChanged: (callback, onReady) => (
-      subscribe('copyboard:history.changed', callback, onReady)
+      subscribeWindow('copyboard:history.changed.native', callback, onReady)
     ),
     onWipeShortcut: (callback) => subscribe('copyboard:history.wipeShortcut', callback),
   },

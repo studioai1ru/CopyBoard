@@ -38,6 +38,7 @@ const SETTINGS_FILE: &str = "settings.json";
 const FAVORITES_FILE: &str = "frequent-items.json";
 const MAX_TEXT_CHARS: usize = 750_000;
 const MAX_IMAGE_CHARS: usize = 40_000_000;
+const MAIN_WINDOW_LABEL: &str = "main";
 const QUICK_ACCESS_LABEL: &str = "quick-access";
 const QUICK_ACCESS_DEFAULT_WIDTH: u64 = 278;
 const QUICK_ACCESS_DEFAULT_HEIGHT: u64 = 64;
@@ -413,10 +414,23 @@ fn record_and_emit_capture<R: Runtime>(
         return;
     }
 
-    // Keep cross-window updates small and deterministic. Images can be many
-    // megabytes, so renderers reload the authoritative history only after the
-    // native write has completed instead of receiving a base64 payload event.
-    let _ = app.emit("copyboard:history.changed", json!({ "force": force }));
+    notify_history_changed(app, force);
+}
+
+fn notify_history_changed<R: Runtime>(app: &AppHandle<R>, force: bool) {
+    // The system watcher runs outside the WebView thread. Dispatch a tiny DOM
+    // signal directly into the main WebView after the disk write completes;
+    // the renderer then reloads authoritative native history. This avoids both
+    // polling and unreliable cross-thread delivery through the JS event plugin.
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+        let script = format!(
+            "window.dispatchEvent(new CustomEvent('copyboard:history.changed.native', {{ detail: {{ force: {} }} }}));",
+            if force { "true" } else { "false" }
+        );
+        if let Err(error) = window.eval(&script) {
+            eprintln!("Failed to notify the history WebView: {error}");
+        }
+    }
 }
 
 fn image_fingerprint(image: &ImageData<'_>) -> String {
@@ -1526,7 +1540,7 @@ fn history_save(
     items: Vec<Value>,
 ) -> Result<bool, String> {
     history_save_inner(&state, &items)?;
-    let _ = app.emit("copyboard:history.changed", ());
+    notify_history_changed(&app, false);
     Ok(true)
 }
 
@@ -1546,7 +1560,7 @@ fn history_clear(app: AppHandle, state: State<'_, RuntimeState>) -> Result<bool,
             }
         }
     }
-    let _ = app.emit("copyboard:history.changed", ());
+    notify_history_changed(&app, false);
     Ok(true)
 }
 
