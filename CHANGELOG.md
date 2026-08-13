@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.11] - 2026-08-13
+
 ### Added
 
 - Added a setting to enable or disable the templates drawer. The drawer-edge setting appears only while the drawer is on.
