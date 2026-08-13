@@ -9,7 +9,7 @@ import {
 
 const DEFAULTS = {
   language: 'ru',
-  viewMode: 'list',
+  viewMode: 'grid',
   closeBehavior: 'minimize',
   startMinimized: false,
   autoStart: true,
@@ -36,7 +36,7 @@ function readLegacyLocal() {
 
 export function useSettings({ theme, handleThemeChange, availableThemes = THEMES }) {
   const [language, setLanguage] = useState('ru');
-  const [viewMode, setViewMode] = useState('list');
+  const [viewMode, setViewMode] = useState('grid');
   const [closeBehavior, setCloseBehavior] = useState('minimize');
   const [startMinimized, setStartMinimized] = useState(false);
   const [autoStart, setAutoStart] = useState(true);

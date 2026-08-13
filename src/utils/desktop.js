@@ -88,10 +88,15 @@ const api = {
     onOpenRequested: (callback) => (
       subscribe('copyboard:quickAccess.openRequested', callback)
     ),
+    onEdgeVisibleChange: (callback) => (
+      subscribe('copyboard:quickAccess.edgeVisible', callback)
+    ),
   },
   ui: {
     onFocusSearch: (callback) => subscribe('copyboard:ui.focusSearch', callback),
     onOpenSettings: (callback) => subscribe('copyboard:ui.openSettings', callback),
+    onEditFavorite: (callback) => subscribe('copyboard:ui.editFavorite', callback),
+    editFavorite: (item) => invoke('ui_edit_favorite', { item }),
   },
   platform: navigator.platform,
 };

@@ -41,8 +41,9 @@ const MAX_IMAGE_CHARS: usize = 40_000_000;
 const QUICK_ACCESS_LABEL: &str = "quick-access";
 const QUICK_ACCESS_DEFAULT_WIDTH: u64 = 278;
 const QUICK_ACCESS_DEFAULT_HEIGHT: u64 = 64;
-const QUICK_ACCESS_HOT_ZONE_HEIGHT: f64 = 8.0;
+const QUICK_ACCESS_HOT_ZONE_HEIGHT: f64 = 20.0;
 const QUICK_ACCESS_VISIBLE_EDGE_HEIGHT: f64 = 8.0;
+const QUICK_ACCESS_INVISIBLE_EDGE_HEIGHT: f64 = 8.0;
 const QUICK_ACCESS_POLL_MS: u64 = 80;
 
 struct ClipboardRuntime {
@@ -118,7 +119,7 @@ fn defaults() -> Value {
         "showQuickAccessEdge": true,
         "quickAccessHotkey": "Ctrl+Shift+V",
         "clearAllHotkey": "Ctrl+Shift+Delete",
-        "viewMode": "list",
+        "viewMode": "grid",
         "theme": "system",
         "maxItems": 100,
         "autoDelete": "never"
@@ -1032,7 +1033,8 @@ fn quick_access_geometry(
     let edge_height = if edge_visible {
         (QUICK_ACCESS_VISIBLE_EDGE_HEIGHT * scale).round().max(1.0) as i32
     } else {
-        0
+        // Keep an invisible on-screen strip so the closed drawer stays hoverable.
+        (QUICK_ACCESS_INVISIBLE_EDGE_HEIGHT * scale).round().max(1.0) as i32
     };
     let trigger_height = if edge_visible {
         edge_height
@@ -1229,6 +1231,7 @@ fn quick_access_set_edge_visible(
         .quick_access_edge_visible
         .store(visible, Ordering::SeqCst);
     apply_quick_access_state(&app, &state);
+    let _ = app.emit("copyboard:quickAccess.edgeVisible", visible);
     Ok(true)
 }
 
@@ -1241,6 +1244,24 @@ fn quick_access_set_enabled(
     save_setting(&state, "quickAccessEnabled", Value::Bool(enabled))?;
     state.quick_access_enabled.store(enabled, Ordering::SeqCst);
     apply_quick_access_state(&app, &state);
+    Ok(true)
+}
+
+#[tauri::command]
+fn ui_edit_favorite(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    item: Value,
+) -> Result<bool, String> {
+    if state.quick_access_ready.load(Ordering::SeqCst) {
+        if let Some(window) = app.get_webview_window(QUICK_ACCESS_LABEL) {
+            state.quick_access_open.store(false, Ordering::SeqCst);
+            state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
+            let _ = position_quick_access(&window, &state, false);
+        }
+    }
+    reveal_window(&app, false);
+    let _ = app.emit("copyboard:ui.editFavorite", item);
     Ok(true)
 }
 
@@ -1651,6 +1672,7 @@ pub fn run() {
             quick_access_set_edge_visible,
             quick_access_set_enabled,
             quick_access_set_open,
+            ui_edit_favorite,
             clip_read_text,
             clip_read_image,
             clip_write_text,

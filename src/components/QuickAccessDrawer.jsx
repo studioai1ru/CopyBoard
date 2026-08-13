@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FiCheck } from 'react-icons/fi';
 import { useFrequentItems } from '../hooks/useFrequentItems';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { favoriteLabel } from '../utils/clipboardUtils';
 import { desktop } from '../utils/desktop';
 import {
@@ -21,17 +22,39 @@ const afterLayout = () => new Promise((resolve) => {
   requestAnimationFrame(() => requestAnimationFrame(resolve));
 });
 
-function QuickAccessDrawer() {
+function QuickAccessDrawer({ edgeVisible }) {
   const { t } = useLanguage();
-  const { items, loaded, refreshItems } = useFrequentItems();
+  const { items, loaded, refreshItems, deleteItem } = useFrequentItems();
   const [copiedId, setCopiedId] = useState(null);
+  const [menu, setMenu] = useState(null);
   const panelRef = useRef(null);
+  const menuRef = useRef(null);
   const closeTimerRef = useRef(null);
   const feedbackTimerRef = useRef(null);
   const openingRef = useRef(false);
   const readyRef = useRef(false);
   const lastSizeRef = useRef('');
   const rows = useMemo(() => groupQuickAccessItems(items), [items]);
+
+  const closeMenu = useCallback(() => {
+    setMenu(null);
+  }, []);
+
+  useEscapeKey(Boolean(menu), closeMenu);
+
+  useEffect(() => {
+    if (!menu) return undefined;
+
+    const close = (event) => {
+      if (menuRef.current?.contains(event.target)) return;
+      setMenu(null);
+    };
+
+    document.addEventListener('mousedown', close);
+    return () => {
+      document.removeEventListener('mousedown', close);
+    };
+  }, [menu]);
 
   const measureAndConfigure = useCallback(async () => {
     const panel = panelRef.current;
@@ -98,9 +121,10 @@ function QuickAccessDrawer() {
   }, [items, loaded, measureAndConfigure]);
 
   const closeSoon = useCallback(() => {
+    if (menu) return;
     window.clearTimeout(closeTimerRef.current);
     closeTimerRef.current = window.setTimeout(() => moveDrawer(false), 80);
-  }, [moveDrawer]);
+  }, [menu, moveDrawer]);
 
   const copyItem = async (item) => {
     const type = classifyPayload(item.content);
@@ -122,6 +146,22 @@ function QuickAccessDrawer() {
     feedbackTimerRef.current = window.setTimeout(() => setCopiedId(null), 900);
   };
 
+  const openMenu = (event, item) => {
+    event.preventDefault();
+    event.stopPropagation();
+    window.clearTimeout(closeTimerRef.current);
+    const panel = panelRef.current?.getBoundingClientRect();
+    const menuWidth = 148;
+    const menuHeight = 84;
+    const maxX = (panel?.width || window.innerWidth) - menuWidth - 4;
+    const maxY = (panel?.height || window.innerHeight) - menuHeight - 4;
+    setMenu({
+      item,
+      x: Math.max(4, Math.min(event.clientX, maxX)),
+      y: Math.max(4, Math.min(event.clientY, maxY)),
+    });
+  };
+
   const labelFor = (item) => (
     favoriteLabel(item.label, item.content) || t('item.image')
   );
@@ -139,7 +179,14 @@ function QuickAccessDrawer() {
         key={item.id}
         type="button"
         className={`quick-drawer__item quick-drawer__item--display-${displayMode} ${copied ? 'is-copied' : ''}`}
-        onClick={() => copyItem(item)}
+        onClick={() => {
+          if (menu) {
+            setMenu(null);
+            return;
+          }
+          copyItem(item);
+        }}
+        onContextMenu={(event) => openMenu(event, item)}
         aria-label={copied
           ? `${label}: ${t('quickAccess.copied')}`
           : t('quickAccess.copy', { label })}
@@ -159,13 +206,17 @@ function QuickAccessDrawer() {
   return (
     <aside
       ref={panelRef}
-      className="quick-drawer"
+      className={`quick-drawer ${edgeVisible ? '' : 'quick-drawer--edge-hidden'}`.trim()}
       aria-label={t('quickAccess.title')}
       onPointerEnter={requestOpen}
       onPointerLeave={closeSoon}
       onKeyDown={(event) => {
         if (event.key !== 'Escape') return;
         event.preventDefault();
+        if (menu) {
+          setMenu(null);
+          return;
+        }
         moveDrawer(false);
       }}
     >
@@ -186,19 +237,55 @@ function QuickAccessDrawer() {
       <span className="sr-only" aria-live="polite">
         {copiedId ? t('quickAccess.copied') : ''}
       </span>
+
+      {menu && (
+        <div
+          ref={menuRef}
+          className="quick-drawer__menu"
+          style={{ left: menu.x, top: menu.y }}
+          role="menu"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={async () => {
+              const item = menu.item;
+              setMenu(null);
+              await desktop()?.ui?.editFavorite?.(item);
+            }}
+          >
+            {t('frequent.edit')}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="danger"
+            onClick={async () => {
+              const id = menu.item.id;
+              setMenu(null);
+              await deleteItem(id);
+            }}
+          >
+            {t('frequent.delete')}
+          </button>
+        </div>
+      )}
     </aside>
   );
 }
 
 export default function QuickAccessSurface() {
   const [language, setLanguage] = useState(null);
+  const [edgeVisible, setEdgeVisible] = useState(true);
 
   useEffect(() => {
     let active = true;
     (async () => {
       const settings = await desktop()?.settings?.get?.();
       await appearance.applyTheme(settings?.theme || appearance.getCurrentTheme());
-      if (active) setLanguage(settings?.language || 'ru');
+      if (!active) return;
+      setLanguage(settings?.language || 'ru');
+      setEdgeVisible(settings?.showQuickAccessEdge !== false);
     })().catch(() => {
       if (active) setLanguage('ru');
     });
@@ -208,9 +295,13 @@ export default function QuickAccessSurface() {
         setLanguage(event.newValue || 'ru');
       }
     };
+    const offEdge = desktop()?.quickAccess?.onEdgeVisibleChange?.((visible) => {
+      setEdgeVisible(visible !== false);
+    });
     window.addEventListener('storage', syncLanguage);
     return () => {
       active = false;
+      offEdge?.();
       window.removeEventListener('storage', syncLanguage);
     };
   }, []);
@@ -218,7 +309,7 @@ export default function QuickAccessSurface() {
   if (!language) return null;
   return (
     <LanguageProvider initialLanguage={language}>
-      <QuickAccessDrawer />
+      <QuickAccessDrawer edgeVisible={edgeVisible} />
     </LanguageProvider>
   );
 }

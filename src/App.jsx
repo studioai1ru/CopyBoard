@@ -129,6 +129,15 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const api = desktop();
+    if (!api?.ui?.onEditFavorite) return undefined;
+    return api.ui.onEditFavorite((item) => {
+      if (!item?.id) return;
+      setEditingFavorite(item);
+    });
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (event) => {
       if (event.key !== 'Escape') return;
       if (handleGlobalEscape(event)) return;

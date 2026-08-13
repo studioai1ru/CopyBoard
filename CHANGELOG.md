@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- The templates drawer now offers the same right-click Edit and Delete actions as favorites in the main window.
+
+### Changed
+
+- New installations and reset settings now use Grid as the default history view.
+
+### Fixed
+
+- When the drawer edge is hidden, an invisible on-screen strip and a wider top-edge hot zone make the drawer easier to open with the mouse.
+
 ## [1.0.11] - 2026-08-13
 
 ### Added
