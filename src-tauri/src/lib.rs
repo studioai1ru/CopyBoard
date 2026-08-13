@@ -40,11 +40,10 @@ const MAX_TEXT_CHARS: usize = 750_000;
 const MAX_IMAGE_CHARS: usize = 40_000_000;
 const MAIN_WINDOW_LABEL: &str = "main";
 const QUICK_ACCESS_LABEL: &str = "quick-access";
+const QUICK_ACCESS_EDITOR_LABEL: &str = "quick-access-editor";
 const QUICK_ACCESS_DEFAULT_WIDTH: u64 = 278;
 const QUICK_ACCESS_DEFAULT_HEIGHT: u64 = 64;
 const QUICK_ACCESS_HIT_AREA_HEIGHT: f64 = 20.0;
-const QUICK_ACCESS_EDITOR_WIDTH: f64 = 820.0;
-const QUICK_ACCESS_EDITOR_HEIGHT: f64 = 620.0;
 const QUICK_ACCESS_POSITION_SCALE: u64 = 1_000_000;
 
 struct ClipboardRuntime {
@@ -75,9 +74,9 @@ struct RuntimeState {
     quick_access_position: AtomicU64,
     quick_access_open: AtomicBool,
     quick_access_ready: AtomicBool,
-    quick_access_editing: AtomicBool,
     quick_access_enabled: AtomicBool,
     quick_access_edge_visible: AtomicBool,
+    quick_access_editor_item: Mutex<Option<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -429,6 +428,32 @@ fn notify_history_changed<R: Runtime>(app: &AppHandle<R>, force: bool) {
         );
         if let Err(error) = window.eval(&script) {
             eprintln!("Failed to notify the history WebView: {error}");
+        }
+    }
+}
+
+fn notify_quick_access_edge_visible<R: Runtime>(app: &AppHandle<R>, visible: bool) {
+    if let Some(window) = app.get_webview_window(QUICK_ACCESS_LABEL) {
+        let script = format!(
+            "window.dispatchEvent(new CustomEvent('copyboard:quickAccess.edgeVisible.native', {{ detail: {} }}));",
+            if visible { "true" } else { "false" }
+        );
+        if let Err(error) = window.eval(&script) {
+            eprintln!("Failed to notify the quick access WebView: {error}");
+        }
+    }
+}
+
+fn notify_quick_access_editor_item<R: Runtime>(app: &AppHandle<R>, item: &Value) {
+    let Ok(payload) = serde_json::to_string(item) else {
+        return;
+    };
+    if let Some(window) = app.get_webview_window(QUICK_ACCESS_EDITOR_LABEL) {
+        let script = format!(
+            "window.dispatchEvent(new CustomEvent('copyboard:quickAccess.editorItem.native', {{ detail: {payload} }}));"
+        );
+        if let Err(error) = window.eval(&script) {
+            eprintln!("Failed to notify the quick access editor WebView: {error}");
         }
     }
 }
@@ -1057,7 +1082,6 @@ fn apply_quick_access_state(app: &AppHandle, state: &RuntimeState) {
     let enabled = state.quick_access_enabled.load(Ordering::SeqCst);
     if !enabled {
         state.quick_access_open.store(false, Ordering::SeqCst);
-        state.quick_access_editing.store(false, Ordering::SeqCst);
         state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
         let _ = window.hide();
         return;
@@ -1069,9 +1093,8 @@ fn apply_quick_access_state(app: &AppHandle, state: &RuntimeState) {
 
     state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
     let open = state.quick_access_open.load(Ordering::SeqCst);
-    let editing = state.quick_access_editing.load(Ordering::SeqCst);
     let _ = position_quick_access(&window, state, open);
-    let _ = window.set_focusable(editing);
+    let _ = window.set_focusable(false);
     let _ = window.set_always_on_top(true);
     let _ = window.show();
 }
@@ -1122,11 +1145,11 @@ fn quick_access_set_edge_visible(
     state
         .quick_access_edge_visible
         .store(visible, Ordering::SeqCst);
-    if !visible && !state.quick_access_editing.load(Ordering::SeqCst) {
+    if !visible {
         state.quick_access_open.store(false, Ordering::SeqCst);
     }
     apply_quick_access_state(&app, &state);
-    let _ = app.emit("copyboard:quickAccess.edgeVisible", visible);
+    notify_quick_access_edge_visible(&app, visible);
     Ok(true)
 }
 
@@ -1147,58 +1170,58 @@ fn quick_access_set_enabled(
     Ok(true)
 }
 
+fn quick_access_editor_item(state: &RuntimeState) -> Option<Value> {
+    let id = state.quick_access_editor_item.lock().ok()?.clone()?;
+    let _guard = state.favorites_io.lock().ok()?;
+    load_json(&favorites_path(state), json!([]))
+        .as_array()?
+        .iter()
+        .find(|item| item.get("id").and_then(Value::as_str) == Some(id.as_str()))
+        .cloned()
+}
+
 #[tauri::command]
-fn quick_access_set_editing(
+fn quick_access_open_editor(
     app: AppHandle,
     state: State<'_, RuntimeState>,
-    editing: bool,
+    id: String,
 ) -> Result<bool, String> {
-    if !state.quick_access_enabled.load(Ordering::SeqCst) {
-        return Ok(false);
+    {
+        let mut current = state
+            .quick_access_editor_item
+            .lock()
+            .map_err(|error| error.to_string())?;
+        *current = Some(id);
+    }
+    let item = quick_access_editor_item(&state)
+        .ok_or_else(|| "Favorite was not found".to_string())?;
+    let window = app
+        .get_webview_window(QUICK_ACCESS_EDITOR_LABEL)
+        .ok_or_else(|| "Quick access editor window is unavailable".to_string())?;
+    window.center().map_err(|error| error.to_string())?;
+    window.show().map_err(|error| error.to_string())?;
+    window.set_focus().map_err(|error| error.to_string())?;
+    notify_quick_access_editor_item(&app, &item);
+    Ok(true)
+}
+
+#[tauri::command]
+fn quick_access_get_editor_item(state: State<'_, RuntimeState>) -> Option<Value> {
+    quick_access_editor_item(&state)
+}
+
+#[tauri::command]
+fn quick_access_close_editor(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+) -> Result<bool, String> {
+    if let Ok(mut current) = state.quick_access_editor_item.lock() {
+        *current = None;
     }
     let window = app
-        .get_webview_window(QUICK_ACCESS_LABEL)
-        .ok_or_else(|| "Quick access window is unavailable".to_string())?;
-
-    state.quick_access_editing.store(editing, Ordering::SeqCst);
-    state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
-    if editing {
-        state.quick_access_open.store(true, Ordering::SeqCst);
-        let monitor = window
-            .current_monitor()
-            .map_err(|error| error.to_string())?
-            .or(window
-                .primary_monitor()
-                .map_err(|error| error.to_string())?)
-            .ok_or_else(|| "Editor monitor is unavailable".to_string())?;
-        let scale = monitor.scale_factor();
-        let monitor_position = monitor.position();
-        let monitor_size = monitor.size();
-        let width = (QUICK_ACCESS_EDITOR_WIDTH * scale)
-            .round()
-            .min(monitor_size.width as f64) as u32;
-        let height = (QUICK_ACCESS_EDITOR_HEIGHT * scale)
-            .round()
-            .min(monitor_size.height as f64) as u32;
-        let x = monitor_position.x + ((monitor_size.width - width) / 2) as i32;
-        let y = monitor_position.y + ((monitor_size.height - height) / 2) as i32;
-        window
-            .set_size(Size::Physical(PhysicalSize::new(width, height)))
-            .map_err(|error| error.to_string())?;
-        window
-            .set_position(Position::Physical(PhysicalPosition::new(x, y)))
-            .map_err(|error| error.to_string())?;
-        window
-            .set_focusable(true)
-            .map_err(|error| error.to_string())?;
-        let _ = window.show();
-        let _ = window.set_focus();
-    } else {
-        window
-            .set_focusable(false)
-            .map_err(|error| error.to_string())?;
-        position_quick_access(&window, &state, true)?;
-    }
+        .get_webview_window(QUICK_ACCESS_EDITOR_LABEL)
+        .ok_or_else(|| "Quick access editor window is unavailable".to_string())?;
+    window.hide().map_err(|error| error.to_string())?;
     Ok(true)
 }
 
@@ -1208,7 +1231,7 @@ fn quick_access_move_horizontal(
     state: State<'_, RuntimeState>,
     delta_x: f64,
 ) -> Result<bool, String> {
-    if state.quick_access_editing.load(Ordering::SeqCst) || !delta_x.is_finite() {
+    if !delta_x.is_finite() {
         return Ok(false);
     }
     let window = app
@@ -1263,9 +1286,6 @@ fn quick_access_set_open(
     reduce_motion: Option<bool>,
 ) -> Result<bool, String> {
     if !state.quick_access_enabled.load(Ordering::SeqCst) {
-        return Ok(true);
-    }
-    if !open && state.quick_access_editing.load(Ordering::SeqCst) {
         return Ok(true);
     }
     let window = app
@@ -1679,7 +1699,6 @@ pub fn run() {
                 ),
                 quick_access_open: AtomicBool::new(false),
                 quick_access_ready: AtomicBool::new(false),
-                quick_access_editing: AtomicBool::new(false),
                 quick_access_enabled: AtomicBool::new(setting_bool(
                     &settings,
                     "quickAccessEnabled",
@@ -1690,6 +1709,7 @@ pub fn run() {
                     "showQuickAccessEdge",
                     true,
                 )),
+                quick_access_editor_item: Mutex::new(None),
             };
             app.manage(state);
             let runtime = app.state::<RuntimeState>();
@@ -1715,7 +1735,9 @@ pub fn run() {
             quick_access_set_edge_visible,
             quick_access_get_edge_visible,
             quick_access_set_enabled,
-            quick_access_set_editing,
+            quick_access_open_editor,
+            quick_access_get_editor_item,
+            quick_access_close_editor,
             quick_access_move_horizontal,
             quick_access_commit_position,
             quick_access_set_open,
@@ -1749,6 +1771,18 @@ pub fn run() {
             if window.label() == QUICK_ACCESS_LABEL {
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
+                }
+                return;
+            }
+
+            if window.label() == QUICK_ACCESS_EDITOR_LABEL {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let state = window.state::<RuntimeState>();
+                    if let Ok(mut current) = state.quick_access_editor_item.lock() {
+                        *current = None;
+                    }
+                    let _ = window.hide();
                 }
                 return;
             }

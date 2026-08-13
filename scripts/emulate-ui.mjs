@@ -129,7 +129,10 @@ const mockSource = String.raw`
     history: [],
     favorites: [initialFavorite],
     calls: [],
-    edgeVisible: true
+    edgeVisible: true,
+    editorItem: new URLSearchParams(location.search).get('surface') === 'quick-access-editor'
+      ? initialFavorite
+      : null
   };
   const callbacks = new Map();
   const listeners = new Map();
@@ -235,14 +238,24 @@ const mockSource = String.raw`
           return copy(state.favorites);
         case 'quick_access_get_edge_visible':
           return state.edgeVisible;
+        case 'quick_access_open_editor':
+          state.editorItem = copy(state.favorites.find((item) => item.id === args.id) || null);
+          return Boolean(state.editorItem);
+        case 'quick_access_get_editor_item':
+          return copy(state.editorItem);
+        case 'quick_access_close_editor':
+          state.editorItem = null;
+          return true;
         case 'quick_access_set_edge_visible':
           state.edgeVisible = args.visible;
-          queueMicrotask(() => emit('copyboard:quickAccess.edgeVisible', args.visible));
+          queueMicrotask(() => window.dispatchEvent(new CustomEvent(
+            'copyboard:quickAccess.edgeVisible.native',
+            { detail: args.visible },
+          )));
           return true;
         case 'quick_access_ready':
         case 'quick_access_configure':
         case 'quick_access_set_enabled':
-        case 'quick_access_set_editing':
         case 'quick_access_move_horizontal':
         case 'quick_access_commit_position':
         case 'quick_access_set_open':
@@ -266,7 +279,10 @@ const mockSource = String.raw`
     emit,
     capture(item) {
       state.history = [copy(item), ...state.history.filter((row) => row.id !== item.id)];
-      emit('copyboard:history.changed', { force: false });
+      window.dispatchEvent(new CustomEvent(
+        'copyboard:history.changed.native',
+        { detail: { force: false } },
+      ));
     },
     setFavorites(items) {
       state.favorites = copy(items);
@@ -274,7 +290,10 @@ const mockSource = String.raw`
     },
     setEdge(visible) {
       state.edgeVisible = visible;
-      emit('copyboard:quickAccess.edgeVisible', visible);
+      window.dispatchEvent(new CustomEvent(
+        'copyboard:quickAccess.edgeVisible.native',
+        { detail: visible },
+      ));
     }
   };
 })();
@@ -349,6 +368,49 @@ async function mainHistoryScenario(cdp, baseUrl, artifactDir) {
     .filter((call) => call.command === 'history_load').length`);
   assert(loadCalls >= 2, 'History change event did not reload native history');
 
+  await cdp.evaluate(`window.__copyboardHarness.capture({
+    id: 'capture-leading-space',
+    type: 'text',
+    content: '\\r\\n\\u2003Morgenshtern базовый минимум',
+    preview: 'Morgenshtern базовый минимум',
+    timestamp: new Date().toISOString()
+  })`);
+  await waitFor(
+    () => cdp.evaluate('document.querySelectorAll(".clip-card").length === 2'),
+    'leading-whitespace history item',
+  );
+  await cdp.evaluate(`document.querySelector('.clip-card--text .clip-card__actions button[aria-pressed]').click()`);
+  await waitFor(
+    () => cdp.evaluate('document.querySelector(".clip-card--text .clip-card__actions button[aria-pressed=true]") !== null'),
+    'normalized favorite active state',
+  );
+  await cdp.evaluate(`document.querySelector('.clip-card--text .clip-card__actions button[aria-pressed=true]').click()`);
+  await waitFor(
+    () => cdp.evaluate('document.querySelector(".clip-card--text .clip-card__actions button[aria-pressed=false]") !== null'),
+    'normalized favorite removal',
+  );
+
+  await cdp.evaluate(`window.__copyboardHarness.setFavorites([{
+    id: 'favorite-file',
+    label: 'report.pdf',
+    content: JSON.stringify(['C:\\\\Work\\\\report.pdf']),
+    icon: 'file',
+    displayMode: 'icon-text'
+  }])`);
+  await waitFor(
+    () => cdp.evaluate('document.querySelector(".frequent-chip--file") !== null'),
+    'file favorite chip',
+  );
+  await cdp.evaluate('document.querySelector(".frequent-chip--file").click()');
+  const fileCopy = await waitFor(async () => {
+    const value = await cdp.evaluate(`window.__copyboardHarness.state.calls
+      .filter((call) => call.command === 'clip_write_files').at(-1) || null`);
+    return value || false;
+  }, 'file favorite native copy');
+  assert(fileCopy.args.recordHistory === true
+    && fileCopy.args.files?.[0] === 'C:\\Work\\report.pdf',
+  `File favorite was not copied as files: ${JSON.stringify(fileCopy)}`);
+
   const imagePath = path.join(artifactDir, 'history-immediate.png');
   await screenshot(cdp, imagePath);
   return {
@@ -357,6 +419,7 @@ async function mainHistoryScenario(cdp, baseUrl, artifactDir) {
     idleLoadCallsAfter,
     refreshMs,
     loadCalls,
+    fileCopy,
     screenshot: imagePath,
   };
 }
@@ -401,7 +464,23 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
   `Context menu is clipped: ${JSON.stringify(menuBounds)}`);
 
   await cdp.evaluate('document.querySelector(".quick-drawer__menu button").click()');
-  await waitFor(() => cdp.evaluate('Boolean(document.querySelector(".frequent-modal"))'), 'drawer editor');
+  await waitFor(
+    () => cdp.evaluate(`window.__copyboardHarness.state.calls
+      .some((call) => call.command === 'quick_access_open_editor')`),
+    'independent editor request',
+  );
+  const drawerAfterEditorRequest = await cdp.evaluate(`({
+    width: document.querySelector('.quick-drawer').getBoundingClientRect().width,
+    modalAttached: Boolean(document.querySelector('.frequent-modal')),
+    closeRequested: window.__copyboardHarness.state.calls
+      .some((call) => call.command === 'quick_access_set_open' && call.args.open === false)
+  })`);
+  assert(drawerAfterEditorRequest.width === 278
+    && !drawerAfterEditorRequest.modalAttached
+    && drawerAfterEditorRequest.closeRequested,
+  `Drawer still owns or moves with the editor: ${JSON.stringify(drawerAfterEditorRequest)}`);
+
+  await navigate(cdp, `${baseUrl}?surface=quick-access-editor`, '.frequent-modal');
   await setViewport(cdp, 820, 620);
   await new Promise((resolve) => setTimeout(resolve, 80));
   const editor = await cdp.evaluate(`(() => {
@@ -434,22 +513,28 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
     type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27,
   });
   await waitFor(() => cdp.evaluate('document.querySelector(".frequent-modal") === null'), 'Escape editor dismissal');
-  const editingCalls = await cdp.evaluate(`window.__copyboardHarness.state.calls
-    .filter((call) => call.command === 'quick_access_set_editing')
-    .map((call) => call.args.editing)`);
-  assert(editingCalls.includes(true) && editingCalls.includes(false),
-    `Editor did not restore drawer state: ${JSON.stringify(editingCalls)}`);
+  const editorCloseCalls = await cdp.evaluate(`window.__copyboardHarness.state.calls
+    .filter((call) => call.command === 'quick_access_close_editor').length`);
+  assert(editorCloseCalls === 1,
+    `Independent editor did not close itself: ${editorCloseCalls}`);
+
+  await navigate(cdp, `${baseUrl}?surface=quick-access`, '.quick-drawer');
+  await waitFor(
+    () => cdp.evaluate('document.querySelectorAll(".quick-drawer__item").length === 1'),
+    'drawer after editor close',
+  );
 
   await setViewport(cdp, 278, 96);
   await cdp.evaluate(`window.__copyboardHarness.setFavorites([
     { id: 'favorite-short', label: 'Короткий', content: 'Короткий', icon: 'text', displayMode: 'icon-text' },
     { id: 'favorite-long', label: 'Очень длинное шаблонное значение, которое не должно менять ширину шторки', content: 'Очень длинное шаблонное значение, которое не должно менять ширину шторки', icon: 'text', displayMode: 'icon-text' },
-    { id: 'favorite-file', label: 'CHANGELOG.md', content: 'CHANGELOG.md', icon: 'file', displayMode: 'icon-text' },
+    { id: 'favorite-file', label: 'CHANGELOG.md', content: JSON.stringify(['C:\\\\Work\\\\CHANGELOG.md']), icon: 'file', displayMode: 'icon-text' },
+    { id: 'favorite-image', label: '', content: 'data:image/png;base64,iVBORw0KGgo=', icon: 'image', displayMode: 'icon' },
     { id: 'favorite-icon-1', label: 'Один', content: 'Один', icon: 'text', displayMode: 'icon' },
     { id: 'favorite-icon-2', label: 'Два', content: 'Два', icon: 'code', displayMode: 'icon' }
   ])`);
   await waitFor(
-    () => cdp.evaluate('document.querySelectorAll(".quick-drawer__item").length === 5'),
+    () => cdp.evaluate('document.querySelectorAll(".quick-drawer__item").length === 6'),
     'live favorites update',
   );
   const configuredDrawerHeight = await waitFor(async () => {
@@ -470,7 +555,11 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
       drawerWidth: drawer.getBoundingClientRect().width,
       itemWidths: items.map((item) => item.getBoundingClientRect().width),
       iconRows: new Set(icons.map((item) => Math.round(item.getBoundingClientRect().top))).size,
-      horizontalScroll: list.scrollWidth > list.clientWidth || document.documentElement.scrollWidth > innerWidth
+      horizontalScroll: list.scrollWidth > list.clientWidth || document.documentElement.scrollWidth > innerWidth,
+      listScrollWidth: list.scrollWidth,
+      listClientWidth: list.clientWidth,
+      documentScrollWidth: document.documentElement.scrollWidth,
+      viewportWidth: innerWidth
     };
   })()`);
   assert(layout.drawerWidth === 278, `Drawer width changed to ${layout.drawerWidth}`);
@@ -478,8 +567,13 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
     `Favorite block widths are inconsistent: ${JSON.stringify(layout.itemWidths)}`);
   assert(layout.iconRows === 1, 'Icon-only favorites did not share a row');
   assert(!layout.horizontalScroll, 'Drawer has a horizontal scrollbar');
+  const imageTitle = await cdp.evaluate(`document.querySelector('.quick-drawer__item[aria-label*="Изображение"]')?.getAttribute('title') ?? null`);
+  assert(imageTitle === null, `Image favorite exposes encoded content in title: ${imageTitle}`);
 
-  await cdp.evaluate('window.__copyboardHarness.setEdge(false)');
+  await cdp.evaluate(`window.__TAURI_INTERNALS__.invoke(
+    'quick_access_set_edge_visible',
+    { visible: false },
+  )`);
   await waitFor(
     () => cdp.evaluate('document.querySelector(".quick-drawer").classList.contains("quick-drawer--edge-hidden")'),
     'live edge hide',
@@ -491,13 +585,37 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
   })()`);
   assert(hiddenEdge.handleHeight === 20 && hiddenEdge.stripeDisplay === 'none',
     `Hidden edge state is incorrect: ${JSON.stringify(hiddenEdge)}`);
-  await cdp.evaluate('window.__copyboardHarness.setEdge(true)');
+  await cdp.evaluate(`window.__TAURI_INTERNALS__.invoke(
+    'quick_access_set_edge_visible',
+    { visible: true },
+  )`);
   await waitFor(
     () => cdp.evaluate('!document.querySelector(".quick-drawer").classList.contains("quick-drawer--edge-hidden")'),
     'live edge show',
   );
-  const visibleStripe = await cdp.evaluate('getComputedStyle(document.querySelector(".quick-drawer__handle span")).display');
-  assert(visibleStripe !== 'none', 'Drawer stripe did not reappear immediately');
+  const visibleEdge = await cdp.evaluate(`(() => {
+    const handle = document.querySelector('.quick-drawer__handle');
+    const style = getComputedStyle(handle);
+    return {
+      stripeDisplay: getComputedStyle(handle.querySelector('span')).display,
+      background: style.backgroundColor,
+      borderStyle: style.borderBottomStyle
+    };
+  })()`);
+  assert(visibleEdge.stripeDisplay !== 'none'
+    && visibleEdge.background !== 'rgba(0, 0, 0, 0)'
+    && visibleEdge.borderStyle !== 'none',
+  `Drawer edge did not restore its themed handle immediately: ${JSON.stringify(visibleEdge)}`);
+  await cdp.evaluate(`document.documentElement.removeAttribute('data-theme')`);
+  await new Promise((resolve) => setTimeout(resolve, 240));
+  const darkEdge = await cdp.evaluate(`(() => {
+    const style = getComputedStyle(document.querySelector('.quick-drawer__handle'));
+    return { background: style.backgroundColor, borderColor: style.borderBottomColor };
+  })()`);
+  assert(darkEdge.background === 'rgb(25, 40, 66)'
+    && darkEdge.borderColor === 'rgb(58, 79, 112)',
+  `Drawer edge disappears in dark mode: ${JSON.stringify(darkEdge)}`);
+  await cdp.evaluate(`document.documentElement.dataset.theme = 'light'`);
 
   const handle = await cdp.evaluate(`(() => {
     const rect = document.querySelector('.quick-drawer__handle').getBoundingClientRect();
@@ -542,7 +660,7 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
     'favorite deletion persistence',
   );
   const remaining = await cdp.evaluate('window.__copyboardHarness.state.favorites.length');
-  assert(remaining === 4, `Favorite delete did not persist; remaining=${remaining}`);
+  assert(remaining === 5, `Favorite delete did not persist; remaining=${remaining}`);
 
   const drawerPath = path.join(artifactDir, 'drawer-fixed.png');
   await screenshot(cdp, drawerPath);
@@ -561,9 +679,13 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
     initialWidth,
     menuBounds,
     editor,
-    editingCalls,
+    drawerAfterEditorRequest,
+    editorCloseCalls,
     layout,
     hiddenEdge,
+    visibleEdge,
+    darkEdge,
+    imageTitle,
     drag,
     remaining,
     emptyDrawer,

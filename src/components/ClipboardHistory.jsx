@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import ClipboardItem from './ClipboardItem';
+import { favoriteContentKey } from '../utils/clipboardUtils';
 import { useLanguage } from '../utils/i18n';
 import '../scss/ClipboardHistory.scss';
 
@@ -128,7 +129,7 @@ const ClipboardHistory = ({
                 onCopy={onCopy}
                 onEdit={onEdit}
                 onAddFavorite={onAddFavorite}
-                isFavorite={favoriteContents?.has(item.content)}
+                isFavorite={favoriteContents?.has(favoriteContentKey(item.content))}
                 viewMode={viewMode}
               />
             </li>

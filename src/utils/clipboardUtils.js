@@ -7,6 +7,12 @@ export function createEntryId() {
   }
   return `cb_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
+
+/** Match favorite content using the same normalization applied when it is saved. */
+export function favoriteContentKey(content) {
+  return String(content || '').trim();
+}
+
 /** Favorite display name: explicit label, else first content line. */
 export function favoriteLabel(label, content) {
   const named = String(label || '').trim();

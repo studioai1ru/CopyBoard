@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHistoryEntry, mergeHistoryEntry } from './clipboardUtils.js';
+import {
+  createHistoryEntry,
+  favoriteContentKey,
+  mergeHistoryEntry,
+} from './clipboardUtils.js';
 import { serializeFileReferences } from './fileReferences.js';
 
 test('template capture becomes a normalized history entry', () => {
@@ -37,8 +41,18 @@ test('file and folder references become a file history entry', () => {
     'C:\\Work\\report.pdf',
     'C:\\Work\\Assets',
   ]);
-  const entry = createHistoryEntry({ content, type: 'file' });
+  const entry = createHistoryEntry({ content });
 
   assert.equal(entry.type, 'file');
   assert.equal(entry.preview, 'report.pdf, Assets');
+});
+
+test('favorite content matching ignores whitespace removed during favorite saving', () => {
+  const captured = '\r\n\u2003Morgenshtern базовый минимум';
+
+  assert.equal(favoriteContentKey(captured), 'Morgenshtern базовый минимум');
+  assert.equal(
+    favoriteContentKey(captured),
+    favoriteContentKey('Morgenshtern базовый минимум'),
+  );
 });

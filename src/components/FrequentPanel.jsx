@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLanguage } from '../utils/i18n';
-import { favoriteLabel } from '../utils/clipboardUtils';
+import { classifyPayload, favoriteLabel } from '../utils/clipboardUtils';
 import {
   normalizeFavoriteDisplayMode,
   resolveFavoriteIcon,
@@ -124,9 +124,10 @@ const FrequentPanel = ({ items, onCopy, onEdit, onDelete, onReorder }) => {
   const isImageItem = (item) => item.content?.startsWith('data:image/');
 
   const handleCopy = async (item) => {
+    const type = classifyPayload(item.content);
     const didCopy = await onCopy(
       item.content,
-      isImageItem(item) ? 'image' : 'text',
+      type,
       { recordHistory: true },
     );
     if (!didCopy) return;

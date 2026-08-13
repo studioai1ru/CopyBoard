@@ -9,6 +9,18 @@
   background: transparent;
 }
 
+.quick-access-editor-surface,
+.quick-access-editor-surface #root {
+  overflow: hidden;
+  background: transparent;
+}
+
+.quick-access-editor-surface .frequent-modal-overlay {
+  inset: 0;
+  padding: var(--spacing-lg);
+  background: transparent;
+}
+
 .quick-access-surface .frequent-modal-overlay {
   top: 0;
   inset: 0;
@@ -50,6 +62,11 @@
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   padding: 6px 4px 4px;
   background: var(--bg-secondary);
+}
+
+.quick-drawer:not(.quick-drawer--edge-hidden) .quick-drawer__items {
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
 }
 
 .quick-drawer__row {
@@ -173,7 +190,10 @@
   min-inline-size: 100%;
   block-size: 20px;
   place-items: center;
-  background: transparent;
+  border: 1px solid var(--border-secondary);
+  border-block-start: 0;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background: var(--bg-tertiary);
   cursor: ew-resize;
   touch-action: none;
   user-select: none;
@@ -189,6 +209,7 @@
 }
 
 .quick-drawer--edge-hidden .quick-drawer__handle {
+  border-color: transparent;
   background: transparent;
 }
 

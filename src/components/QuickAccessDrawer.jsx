@@ -15,7 +15,6 @@ import { appearance } from '../utils/appearance';
 import { classifyPayload } from '../utils/clipboardUtils';
 import { parseFileReferences } from '../utils/fileReferences';
 import FavoriteTypeIcon from './FavoriteTypeIcon';
-import FrequentEditModal from './FrequentEditModal';
 import '../scss/QuickAccessDrawer.scss';
 
 const COPY_FEEDBACK_MS = 240;
@@ -30,18 +29,15 @@ function QuickAccessDrawer({ edgeVisible }) {
     items,
     loaded,
     refreshItems,
-    updateItem,
     deleteItem,
   } = useFrequentItems();
   const [copiedId, setCopiedId] = useState(null);
   const [menu, setMenu] = useState(null);
-  const [editingItem, setEditingItem] = useState(null);
   const panelRef = useRef(null);
   const menuRef = useRef(null);
   const closeTimerRef = useRef(null);
   const feedbackTimerRef = useRef(null);
   const openingRef = useRef(false);
-  const editingRef = useRef(false);
   const dragRef = useRef(null);
   const dragFrameRef = useRef(null);
   const dragQueueRef = useRef(Promise.resolve());
@@ -69,7 +65,6 @@ function QuickAccessDrawer({ edgeVisible }) {
   }, [menu]);
 
   const measureAndConfigure = useCallback(async () => {
-    if (editingRef.current) return false;
     const panel = panelRef.current;
     if (!panel) return false;
 
@@ -116,31 +111,16 @@ function QuickAccessDrawer({ edgeVisible }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [moveDrawer]);
 
-  const closeEditor = useCallback(async () => {
-    setEditingItem(null);
-    await desktop()?.quickAccess?.setEditing?.(false);
-    editingRef.current = false;
-    await afterLayout();
-    lastSizeRef.current = '';
-    await measureAndConfigure();
-  }, [measureAndConfigure]);
-
   const openEditor = useCallback(async (item) => {
     window.clearTimeout(closeTimerRef.current);
-    editingRef.current = true;
     setMenu(null);
     try {
-      const opened = await desktop()?.quickAccess?.setEditing?.(true);
-      if (opened === false) {
-        editingRef.current = false;
-        return;
-      }
-      setEditingItem(item);
+      const opened = await desktop()?.quickAccess?.openEditor?.(item.id);
+      if (opened !== false) await moveDrawer(false);
     } catch (error) {
-      editingRef.current = false;
       console.error('Favorite editor failed to open:', error);
     }
-  }, []);
+  }, [moveDrawer]);
 
   const requestOpen = useCallback(async () => {
     if (openingRef.current) return;
@@ -154,12 +134,6 @@ function QuickAccessDrawer({ edgeVisible }) {
       openingRef.current = false;
     }
   }, [measureAndConfigure, moveDrawer, refreshItems]);
-
-  useEffect(() => {
-    if (!editingItem || !loaded) return;
-    if (items.some((item) => item.id === editingItem.id)) return;
-    closeEditor();
-  }, [closeEditor, editingItem, items, loaded]);
 
   useEffect(() => {
     document.body.classList.add('quick-access-surface');
@@ -185,10 +159,10 @@ function QuickAccessDrawer({ edgeVisible }) {
   }, [items, loaded, measureAndConfigure, menu]);
 
   const closeSoon = useCallback(() => {
-    if (menu || editingItem) return;
+    if (menu) return;
     window.clearTimeout(closeTimerRef.current);
     closeTimerRef.current = window.setTimeout(() => moveDrawer(false), 80);
-  }, [editingItem, menu, moveDrawer]);
+  }, [menu, moveDrawer]);
 
   const handleMenuKeyDown = (event) => {
     const buttons = [...(menuRef.current?.querySelectorAll('button') || [])];
@@ -216,7 +190,7 @@ function QuickAccessDrawer({ edgeVisible }) {
   }, []);
 
   const startHorizontalDrag = (event) => {
-    if (event.button !== 0 || editingItem) return;
+    if (event.button !== 0) return;
     window.clearTimeout(closeTimerRef.current);
     event.currentTarget.setPointerCapture?.(event.pointerId);
     dragRef.current = {
@@ -291,6 +265,7 @@ function QuickAccessDrawer({ edgeVisible }) {
   const renderItem = (item) => {
     const label = labelFor(item);
     const copied = copiedId === item.id;
+    const type = classifyPayload(item.content);
     const icon = resolveFavoriteIcon(item);
     const displayMode = normalizeFavoriteDisplayMode(item.displayMode);
     const showIcon = displayMode !== 'text';
@@ -312,7 +287,7 @@ function QuickAccessDrawer({ edgeVisible }) {
         aria-label={copied
           ? `${label}: ${t('quickAccess.copied')}`
           : t('quickAccess.copy', { label })}
-        title={item.content}
+        title={type === 'image' ? undefined : item.content}
       >
         {showIcon && (
           copied
@@ -331,8 +306,6 @@ function QuickAccessDrawer({ edgeVisible }) {
         ref={panelRef}
         className={`quick-drawer ${edgeVisible ? '' : 'quick-drawer--edge-hidden'}`.trim()}
         aria-label={t('quickAccess.title')}
-        aria-hidden={editingItem ? true : undefined}
-        inert={editingItem ? true : undefined}
         onPointerEnter={requestOpen}
         onPointerLeave={closeSoon}
       >
@@ -395,13 +368,6 @@ function QuickAccessDrawer({ edgeVisible }) {
         )}
       </aside>
 
-      {editingItem && (
-        <FrequentEditModal
-          item={editingItem}
-          onSave={updateItem}
-          onClose={closeEditor}
-        />
-      )}
     </>
   );
 }

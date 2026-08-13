@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { createEntryId, favoriteLabel } from '../utils/clipboardUtils';
+import {
+  createEntryId,
+  favoriteContentKey,
+  favoriteLabel,
+} from '../utils/clipboardUtils';
 import {
   detectFavoriteIcon,
   normalizeFavoriteDisplayMode,
@@ -46,9 +50,9 @@ export function useFrequentItems() {
   }, []);
 
   const addItem = useCallback(async (label, content, icon, displayMode = 'icon-text') => {
-    const trimmed = String(content || '').trim();
+    const trimmed = favoriteContentKey(content);
     if (!trimmed) return false;
-    if (items.some((row) => row.content === trimmed)) return false;
+    if (items.some((row) => favoriteContentKey(row.content) === trimmed)) return false;
 
     await persist([
       {
@@ -73,23 +77,25 @@ export function useFrequentItems() {
   );
 
   const removeByContent = useCallback(async (content) => {
-    if (!content) return false;
-    if (!items.some((row) => row.content === content)) return false;
-    await persist(items.filter((row) => row.content !== content));
+    const key = favoriteContentKey(content);
+    if (!key) return false;
+    if (!items.some((row) => favoriteContentKey(row.content) === key)) return false;
+    await persist(items.filter((row) => favoriteContentKey(row.content) !== key));
     return true;
   }, [items, persist]);
 
   const toggleFromClipboardItem = useCallback(async (clipboardItem) => {
-    if (!clipboardItem?.content) return false;
-    if (items.some((row) => row.content === clipboardItem.content)) {
-      await persist(items.filter((row) => row.content !== clipboardItem.content));
+    const key = favoriteContentKey(clipboardItem?.content);
+    if (!key) return false;
+    if (items.some((row) => favoriteContentKey(row.content) === key)) {
+      await persist(items.filter((row) => favoriteContentKey(row.content) !== key));
       return false;
     }
     return addItem('', clipboardItem.content, detectFavoriteIcon(clipboardItem.content));
   }, [addItem, items, persist]);
 
   const updateItem = useCallback(async (id, label, content, icon, displayMode = 'icon-text') => {
-    const trimmed = String(content || '').trim();
+    const trimmed = favoriteContentKey(content);
     if (!trimmed) return false;
     const current = items.find((row) => row.id === id);
     if (!current) return false;
@@ -138,7 +144,10 @@ export function useFrequentItems() {
   }, [items, persist]);
 
   const hasContent = useCallback(
-    (content) => items.some((row) => row.content === content),
+    (content) => {
+      const key = favoriteContentKey(content);
+      return Boolean(key) && items.some((row) => favoriteContentKey(row.content) === key);
+    },
     [items],
   );
 

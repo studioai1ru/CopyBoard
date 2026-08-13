@@ -14,6 +14,7 @@ import { useSettings } from './hooks/useSettings';
 import { useClipboardHistory } from './hooks/useClipboardHistory';
 import { useFrequentItems } from './hooks/useFrequentItems';
 import { resolveFavoriteIcon } from './utils/favoriteIcons';
+import { favoriteContentKey } from './utils/clipboardUtils';
 import './scss/App.scss';
 
 window.addEventListener('contextmenu', (event) => event.preventDefault());
@@ -101,7 +102,7 @@ function App() {
   } = useFrequentItems();
 
   const favoriteContents = useMemo(
-    () => new Set(frequentItems.map((item) => item.content)),
+    () => new Set(frequentItems.map((item) => favoriteContentKey(item.content))),
     [frequentItems],
   );
 

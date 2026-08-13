@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- File and folder favorites now copy back as file references and remain labeled as files in clipboard history.
+- Image favorites in the templates drawer no longer expose their encoded image data in a hover tooltip.
+- Favorites created from text with leading invisible or whitespace characters now show the active star and can be removed normally.
+- The drawer-edge setting now updates the running drawer immediately, and its visible edge is once again rendered as a themed handle instead of a transparent strip.
+- Editing a drawer template now opens in an independent centered window without moving the drawer from the screen edge.
+
 ## [1.0.15] - 2026-08-13
 
 ### Fixed

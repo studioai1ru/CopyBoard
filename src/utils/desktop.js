@@ -91,7 +91,9 @@ const api = {
     setEnabled: (enabled) => invoke('quick_access_set_enabled', { enabled }),
     setEdgeVisible: (visible) => invoke('quick_access_set_edge_visible', { visible }),
     getEdgeVisible: () => invoke('quick_access_get_edge_visible'),
-    setEditing: (editing) => invoke('quick_access_set_editing', { editing }),
+    openEditor: (id) => invoke('quick_access_open_editor', { id }),
+    getEditorItem: () => invoke('quick_access_get_editor_item'),
+    closeEditor: () => invoke('quick_access_close_editor'),
     moveHorizontal: (deltaX) => invoke('quick_access_move_horizontal', { deltaX }),
     commitPosition: () => invoke('quick_access_commit_position'),
     setOpen: (open, reduceMotion = false) => (
@@ -101,7 +103,10 @@ const api = {
       subscribe('copyboard:quickAccess.openRequested', callback)
     ),
     onEdgeVisibleChange: (callback, onReady) => (
-      subscribe('copyboard:quickAccess.edgeVisible', callback, onReady)
+      subscribeWindow('copyboard:quickAccess.edgeVisible.native', callback, onReady)
+    ),
+    onEditorItemChange: (callback, onReady) => (
+      subscribeWindow('copyboard:quickAccess.editorItem.native', callback, onReady)
     ),
   },
   ui: {

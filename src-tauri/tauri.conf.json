@@ -44,6 +44,23 @@
         "skipTaskbar": true,
         "transparent": true,
         "shadow": false
+      },
+      {
+        "label": "quick-access-editor",
+        "title": "CopyBoard Template Editor",
+        "url": "index.html?surface=quick-access-editor",
+        "width": 820,
+        "height": 620,
+        "center": true,
+        "decorations": false,
+        "visible": false,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "transparent": true,
+        "shadow": false
       }
     ],
     "security": {
