@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-08-13
+
 ### Changed
 
 - CopyBoard now uses a lightweight Tauri shell while preserving the existing interface, clipboard history, favorites, tray controls, shortcuts, and local settings.
