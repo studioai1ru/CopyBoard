@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-08-13
+
 ### Added
 
 - Clipboard history now captures file and folder references without copying their contents into CopyBoard storage.
