@@ -1,4 +1,4 @@
-import { FiCode, FiImage, FiLink, FiMail, FiPhone, FiType } from 'react-icons/fi';
+import { FiCode, FiFile, FiImage, FiLink, FiMail, FiPhone, FiType } from 'react-icons/fi';
 
 /**
  * Shared type-badge look — history cards are the source of truth
@@ -19,6 +19,11 @@ export const TYPE_ICON_META = {
     Icon: FiImage,
     bg: 'var(--type-image-bg, #34d399)',
     fg: 'var(--type-image-color, #0f172a)',
+  },
+  file: {
+    Icon: FiFile,
+    bg: 'var(--type-file-bg, #fb923c)',
+    fg: 'var(--type-file-color, #0f172a)',
   },
   // Favorites-only extras — same visual language as history badges
   email: {

@@ -1,3 +1,5 @@
+import { fileReferenceName, parseFileReferences } from './fileReferences.js';
+
 /** Create a stable-enough unique id for history/favorites rows. */
 export function createEntryId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -14,13 +16,23 @@ export function favoriteLabel(label, content) {
     return '';
   }
 
+  const files = parseFileReferences(content);
+  if (files.length > 0) {
+    const first = fileReferenceName(files[0]);
+    return files.length > 1 ? `${first} +${files.length - 1}` : first;
+  }
+
   const first = String(content || '').trim().split(/\r?\n/)[0] || '';
   return first.slice(0, 48) || '…';
 }
 
-/** Score-based content classifier (text | code | image). */
+/** Score-based content classifier (text | code | image | file). */
 export function classifyPayload(body, hint = null) {
   const value = String(body || '');
+
+  if (hint === 'file' || parseFileReferences(value).length > 0) {
+    return 'file';
+  }
 
   if (hint === 'image' || value.startsWith('data:image/')) {
     if (value.includes('base64') || value.length > 800) {
@@ -50,6 +62,9 @@ export function classifyPayload(body, hint = null) {
 
 export function makePreview(body, kind) {
   if (kind === 'image') return body;
+  if (kind === 'file') {
+    return parseFileReferences(body).map(fileReferenceName).join(', ');
+  }
   const text = String(body || '');
   if (text.length <= 120) return text;
   return `${text.slice(0, 120)}…`;

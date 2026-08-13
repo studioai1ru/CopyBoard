@@ -104,7 +104,7 @@ function App() {
   );
 
   const typeCounts = useMemo(() => {
-    const counts = { text: 0, image: 0, code: 0 };
+    const counts = { text: 0, image: 0, code: 0, file: 0 };
     for (const row of clipboardHistory) {
       if (counts[row.type] !== undefined) counts[row.type] += 1;
     }
@@ -152,7 +152,9 @@ function App() {
   const filteredFrequentItems = useMemo(
     () => frequentItems.filter((item) => {
       const favoriteIcon = resolveFavoriteIcon(item);
-      const favoriteType = ['image', 'code'].includes(favoriteIcon) ? favoriteIcon : 'text';
+      const favoriteType = ['image', 'code', 'file'].includes(favoriteIcon)
+        ? favoriteIcon
+        : 'text';
       return filter === 'all' || favoriteType === filter;
     }),
     [filter, frequentItems],

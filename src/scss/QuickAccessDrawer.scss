@@ -13,7 +13,7 @@
   display: grid;
   inline-size: fit-content;
   min-inline-size: 52px;
-  max-inline-size: 266px;
+  max-inline-size: 278px;
   max-block-size: 420px;
   grid-template-rows: minmax(0, auto) 8px;
   overflow: hidden;
@@ -29,17 +29,19 @@
 .quick-drawer__items {
   display: flex;
   inline-size: fit-content;
-  max-inline-size: 252px;
+  max-inline-size: 250px;
+  box-sizing: content-box;
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
+  overflow-x: hidden;
   overflow-y: auto;
-  padding: 6px 6px 4px;
+  padding: 6px 8px 4px;
 }
 
 .quick-drawer__row {
   display: flex;
-  max-inline-size: 252px;
+  max-inline-size: 250px;
   align-items: center;
   gap: 4px;
 }

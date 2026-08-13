@@ -37,6 +37,7 @@ export function detectFavoriteIcon(content) {
   const value = String(content || '').trim();
   if (!value) return 'text';
   if (value.startsWith('data:image/')) return 'image';
+  if (classifyPayload(value) === 'file') return 'file';
 
   const singleLine = !value.includes('\n');
   if (singleLine && EMAIL_RE.test(value)) return 'email';

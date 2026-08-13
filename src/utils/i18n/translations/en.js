@@ -24,6 +24,7 @@ export const en = {
     text: 'Text',
     images: 'Images',
     code: 'Code',
+    files: 'Files and folders',
   },
 
   frequent: {
@@ -50,6 +51,7 @@ export const en = {
       text: 'Text',
       code: 'Code',
       image: 'Image',
+      file: 'File or folder',
       email: 'Email',
       phone: 'Phone',
       url: 'Link',
@@ -74,6 +76,7 @@ export const en = {
     text: 'Text',
     image: 'Image',
     code: 'Code',
+    file: 'Files and folders',
     copy: 'Copy',
     copied: 'Copied',
     edit: 'Edit',
@@ -91,7 +94,7 @@ export const en = {
   empty: {
     title: 'No history yet',
     titleSearch: 'No matches',
-    description: 'Copy something — it will show up here.',
+    description: 'Copy text, an image, a file, or a folder — it will show up here.',
     descriptionSearch: 'No entries for “{{query}}”.',
   },
 

@@ -29,7 +29,7 @@
         "label": "quick-access",
         "title": "CopyBoard Templates",
         "url": "index.html?surface=quick-access",
-        "width": 266,
+        "width": 278,
         "height": 64,
         "decorations": false,
         "visible": false,

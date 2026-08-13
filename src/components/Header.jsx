@@ -11,13 +11,13 @@ import { useLanguage } from '../utils/i18n';
 import { getTypeIconMeta } from '../utils/typeIconMeta';
 import '../scss/Header.scss';
 
-const FILTERS = ['all', 'text', 'image', 'code'];
+const FILTERS = ['all', 'text', 'image', 'code', 'file'];
 
 const Header = ({
   filter,
   setFilter,
   totalItems,
-  typeCounts = { text: 0, image: 0, code: 0 },
+  typeCounts = { text: 0, image: 0, code: 0, file: 0 },
   searchQuery,
   setSearchQuery,
   viewMode,
@@ -34,7 +34,7 @@ const Header = ({
 
     return {
       value,
-      label: t(`filter.${value === 'image' ? 'images' : value}`),
+      label: t(`filter.${value === 'image' ? 'images' : value === 'file' ? 'files' : value}`),
       count: value === 'all' ? totalItems : (typeCounts[value] || 0),
       ...typeMeta,
     };

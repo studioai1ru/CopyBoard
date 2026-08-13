@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHistoryEntry, mergeHistoryEntry } from './clipboardUtils.js';
+import { serializeFileReferences } from './fileReferences.js';
 
 test('template capture becomes a normalized history entry', () => {
   const timestamp = '2026-08-13T10:00:00.000Z';
@@ -29,4 +30,15 @@ test('copying an existing template refreshes it at the top without duplication',
   assert.equal(result[0].content, 'template');
   assert.equal(result[0].timestamp, '2026-08-13T10:00:00.000Z');
   assert.equal(result.filter((entry) => entry.content === 'template').length, 1);
+});
+
+test('file and folder references become a file history entry', () => {
+  const content = serializeFileReferences([
+    'C:\\Work\\report.pdf',
+    'C:\\Work\\Assets',
+  ]);
+  const entry = createHistoryEntry({ content, type: 'file' });
+
+  assert.equal(entry.type, 'file');
+  assert.equal(entry.preview, 'report.pdf, Assets');
 });

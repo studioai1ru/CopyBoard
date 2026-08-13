@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Clipboard history now captures file and folder references without copying their contents into CopyBoard storage.
+
+### Changed
+
+- The top-edge drawer now opens and closes more smoothly and reserves enough width around its content to avoid a horizontal scrollbar.
+
+### Fixed
+
+- Clipboard monitoring now starts only after the renderer listener is ready and reliably detects the same value again after another clipboard format.
+
 ## [1.0.8] - 2026-08-13
 
 ### Changed

@@ -10,6 +10,8 @@ import {
 import { clampQuickAccessSize, groupQuickAccessItems } from '../utils/quickAccessLayout';
 import { LanguageProvider, useLanguage } from '../utils/i18n';
 import { appearance } from '../utils/appearance';
+import { classifyPayload } from '../utils/clipboardUtils';
+import { parseFileReferences } from '../utils/fileReferences';
 import FavoriteTypeIcon from './FavoriteTypeIcon';
 import '../scss/QuickAccessDrawer.scss';
 
@@ -101,11 +103,13 @@ function QuickAccessDrawer() {
   }, [moveDrawer]);
 
   const copyItem = async (item) => {
-    const type = item.content?.startsWith('data:image/') ? 'image' : 'text';
+    const type = classifyPayload(item.content);
     const api = desktop();
     const didCopy = type === 'image'
       ? await api?.clip?.writeImage?.(item.content, true)
-      : await api?.clip?.writeText?.(item.content, true);
+      : type === 'file'
+        ? await api?.clip?.writeFiles?.(parseFileReferences(item.content), true)
+        : await api?.clip?.writeText?.(item.content, true);
     if (!didCopy) return;
 
     setCopiedId(item.id);

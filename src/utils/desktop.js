@@ -1,13 +1,16 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
-function subscribe(channel, callback) {
+function subscribe(channel, callback, onReady) {
   let active = true;
   let dispose = null;
 
   listen(channel, (event) => callback(event.payload))
     .then((unlisten) => {
-      if (active) dispose = unlisten;
+      if (active) {
+        dispose = unlisten;
+        onReady?.();
+      }
       else unlisten();
     })
     .catch((error) => console.error(`Failed to subscribe to ${channel}:`, error));
@@ -40,8 +43,13 @@ const api = {
     writeImage: (dataUrl, recordHistory = false) => (
       invoke('clip_write_image', { dataUrl, recordHistory })
     ),
+    writeFiles: (files, recordHistory = false) => (
+      invoke('clip_write_files', { files, recordHistory })
+    ),
     suppress: (ms) => invoke('clip_suppress', { ms }),
-    onCapture: (callback) => subscribe('copyboard:clip.capture', callback),
+    onCapture: (callback, onReady) => (
+      subscribe('copyboard:clip.capture', callback, onReady)
+    ),
   },
   settings: {
     get: () => invoke('settings_get'),

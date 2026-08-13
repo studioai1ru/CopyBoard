@@ -7,6 +7,7 @@ import {
   trimHistory,
 } from '../utils/clipboardUtils';
 import { desktop } from '../utils/desktop';
+import { parseFileReferences } from '../utils/fileReferences';
 
 /**
  * Clipboard history store for the renderer.
@@ -84,10 +85,17 @@ export function useClipboardHistory({ maxItems, autoDelete }) {
       if (api?.clip) {
         // Main process suppress gate prevents echo into history.
         if (type === 'image') await api.clip.writeImage(content, recordHistory);
-        else await api.clip.writeText(content, recordHistory);
+        else if (type === 'file') {
+          const files = parseFileReferences(content);
+          if (files.length === 0) return false;
+          await api.clip.writeFiles(files, recordHistory);
+        } else await api.clip.writeText(content, recordHistory);
         return true;
       }
 
+      if (type === 'file') {
+        return false;
+      }
       if (type === 'image') {
         const response = await fetch(content);
         const blob = await response.blob();
@@ -205,8 +213,7 @@ export function useClipboardHistory({ maxItems, autoDelete }) {
     const api = desktop();
     if (!api?.clip) return undefined;
 
-    api.clip.start();
-    const offCapture = api.clip.onCapture(ingestCapture);
+    const offCapture = api.clip.onCapture(ingestCapture, () => api.clip.start());
     const offWipe = api.history?.onWipeShortcut?.(() => {
       clearHistory();
     });

@@ -3,6 +3,7 @@ import { FiCheck, FiCopy, FiEdit2, FiStar, FiTrash2 } from 'react-icons/fi';
 import { useLanguage } from '../utils/i18n';
 import { getTypeIconMeta } from '../utils/typeIconMeta';
 import ImagePreviewModal from './ImagePreviewModal';
+import { displayFileReference, parseFileReferences } from '../utils/fileReferences';
 import '../scss/ClipboardItem.scss';
 
 const ClipboardItem = ({
@@ -19,13 +20,13 @@ const ClipboardItem = ({
   const [copied, setCopied] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  const type = ['text', 'code', 'image'].includes(item.type) ? item.type : 'text';
+  const type = ['text', 'code', 'image', 'file'].includes(item.type) ? item.type : 'text';
   const typeMeta = getTypeIconMeta(type);
   const TypeIcon = typeMeta.Icon;
   const typeLabel = t(`item.${type}`);
   const ordinal = index + 1;
   const showActionText = viewMode === 'grid';
-  const actionCount = type === 'image' ? 3 : 4;
+  const actionCount = ['image', 'file'].includes(type) ? 3 : 4;
 
   const actionName = (key) => `${t(key)} · ${typeLabel} ${ordinal}`;
 
@@ -53,6 +54,19 @@ const ClipboardItem = ({
         >
           <img src={item.content} alt={typeLabel} loading="lazy" />
         </button>
+      );
+    }
+
+    if (type === 'file') {
+      const files = parseFileReferences(item.content);
+      return (
+        <ul className="clip-card__files">
+          {files.map((file) => (
+            <li key={file} title={displayFileReference(file)}>
+              {displayFileReference(file)}
+            </li>
+          ))}
+        </ul>
       );
     }
 
@@ -93,7 +107,7 @@ const ClipboardItem = ({
           {showActionText && <span className="clip-card__action-label">{copied ? t('item.copied') : t('item.copy')}</span>}
         </button>
 
-        {type !== 'image' && (
+        {!['image', 'file'].includes(type) && (
           <button
             type="button"
             onClick={() => onEdit(item)}

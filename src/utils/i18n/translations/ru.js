@@ -24,6 +24,7 @@ export const ru = {
     text: 'Текст',
     images: 'Картинки',
     code: 'Код',
+    files: 'Файлы и папки',
   },
 
   frequent: {
@@ -50,6 +51,7 @@ export const ru = {
       text: 'Текст',
       code: 'Код',
       image: 'Изображение',
+      file: 'Файл или папка',
       email: 'Почта',
       phone: 'Телефон',
       url: 'Ссылка',
@@ -74,6 +76,7 @@ export const ru = {
     text: 'Текст',
     image: 'Изображение',
     code: 'Код',
+    file: 'Файлы и папки',
     copy: 'Копировать',
     copied: 'Скопировано',
     edit: 'Изменить',
@@ -91,7 +94,7 @@ export const ru = {
   empty: {
     title: 'История пуста',
     titleSearch: 'Ничего не найдено',
-    description: 'Скопируйте что-нибудь — запись появится здесь.',
+    description: 'Скопируйте текст, изображение, файл или папку — запись появится здесь.',
     descriptionSearch: 'По запросу «{{query}}» записей нет.',
   },
 
