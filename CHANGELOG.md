@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-08-13
+
 ### Changed
 
 - Renamed the Language settings section to Interface.
