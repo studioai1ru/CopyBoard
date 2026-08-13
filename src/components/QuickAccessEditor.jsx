@@ -7,7 +7,7 @@ import { handleGlobalEscape } from '../utils/escapeStack';
 import FrequentEditModal from './FrequentEditModal';
 
 function QuickAccessEditor() {
-  const { items, loaded, updateItem } = useFrequentItems();
+  const { refreshItems, updateItem } = useFrequentItems();
   const [editingItem, setEditingItem] = useState(null);
 
   const closeEditor = useCallback(async () => {
@@ -24,23 +24,26 @@ function QuickAccessEditor() {
   useEffect(() => {
     let active = true;
     const syncItem = async () => {
-      const item = await desktop()?.quickAccess?.getEditorItem?.();
+      const [item] = await Promise.all([
+        desktop()?.quickAccess?.getEditorItem?.(),
+        refreshItems(),
+      ]);
       if (active) setEditingItem(item || null);
     };
     const offItem = desktop()?.quickAccess?.onEditorItemChange?.((item) => {
-      if (active) setEditingItem(item || null);
+      refreshItems().finally(() => {
+        if (active) setEditingItem(item || null);
+      });
     }, syncItem);
+    window.addEventListener('focus', syncItem);
+    document.addEventListener('visibilitychange', syncItem);
     return () => {
       active = false;
       offItem?.();
+      window.removeEventListener('focus', syncItem);
+      document.removeEventListener('visibilitychange', syncItem);
     };
-  }, []);
-
-  useEffect(() => {
-    if (!loaded || !editingItem) return;
-    const current = items.find((item) => item.id === editingItem.id);
-    if (!current) closeEditor();
-  }, [closeEditor, editingItem, items, loaded]);
+  }, [refreshItems]);
 
   return editingItem ? (
     <FrequentEditModal
@@ -52,14 +55,20 @@ function QuickAccessEditor() {
 }
 
 export default function QuickAccessEditorSurface() {
-  const [language, setLanguage] = useState(null);
+  const [language, setLanguage] = useState(
+    () => localStorage.getItem('copyboard.language') || localStorage.getItem('appLanguage') || 'ru',
+  );
 
   useEffect(() => {
     document.body.classList.add('quick-access-editor-surface');
     let active = true;
     (async () => {
       const settings = await desktop()?.settings?.get?.();
-      await appearance.applyTheme(settings?.theme || appearance.getCurrentTheme());
+      const theme = settings?.theme || appearance.getCurrentTheme();
+      const resolved = theme === 'system'
+        ? await desktop()?.settings?.getResolvedTheme?.()
+        : theme;
+      await appearance.applyTheme(theme, resolved);
       if (active) setLanguage(settings?.language || 'ru');
     })().catch(() => {
       if (active) setLanguage('ru');
@@ -77,7 +86,6 @@ export default function QuickAccessEditorSurface() {
     };
   }, []);
 
-  if (!language) return null;
   return (
     <LanguageProvider initialLanguage={language}>
       <QuickAccessEditor />

@@ -380,7 +380,11 @@ export default function QuickAccessSurface() {
     let active = true;
     (async () => {
       const settings = await desktop()?.settings?.get?.();
-      await appearance.applyTheme(settings?.theme || appearance.getCurrentTheme());
+      const theme = settings?.theme || appearance.getCurrentTheme();
+      const resolved = theme === 'system'
+        ? await desktop()?.settings?.getResolvedTheme?.()
+        : theme;
+      await appearance.applyTheme(theme, resolved);
       if (!active) return;
       setLanguage(settings?.language || 'ru');
       setEdgeVisible(settings?.showQuickAccessEdge !== false);

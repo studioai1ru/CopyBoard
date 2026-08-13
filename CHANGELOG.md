@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- The favorite editor opened from the drawer now becomes visible reliably and no longer closes itself when its background data is stale.
+- On a clean first launch, the drawer now resolves System appearance from the main window and matches its light or dark theme immediately.
+
 ## [1.0.16] - 2026-08-14
 
 ### Fixed

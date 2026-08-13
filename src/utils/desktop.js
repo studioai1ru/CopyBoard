@@ -61,6 +61,7 @@ const api = {
     setLaunchHidden: (hidden) => invoke('settings_set_launch_hidden', { hidden }),
     getLaunchHidden: () => invoke('settings_get_launch_hidden'),
     getLanguage: () => invoke('settings_get_language'),
+    getResolvedTheme: () => invoke('settings_get_resolved_theme'),
     setLanguage: (language) => invoke('settings_set_language', { language }),
     setAutoStart: (enabled) => invoke('settings_set_auto_start', { enabled }),
     getAutoStart: () => invoke('settings_get_auto_start'),

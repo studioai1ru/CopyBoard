@@ -34,8 +34,11 @@ function App() {
     const boot = async () => {
       const current = appearance.getCurrentTheme();
       const safe = ['system', 'dark', 'light'].includes(current) ? current : 'system';
+      const resolved = safe === 'system'
+        ? await desktop()?.settings?.getResolvedTheme?.()
+        : safe;
       setTheme(safe);
-      await appearance.applyTheme(safe);
+      await appearance.applyTheme(safe, resolved);
     };
     boot();
   }, []);
@@ -50,7 +53,10 @@ function App() {
 
     try {
       setIsThemeChanging(true);
-      await appearance.applyTheme(newTheme);
+      const resolved = newTheme === 'system'
+        ? await desktop()?.settings?.getResolvedTheme?.()
+        : newTheme;
+      await appearance.applyTheme(newTheme, resolved);
       setTheme(newTheme);
     } catch (error) {
       console.error('Theme change failed:', error);

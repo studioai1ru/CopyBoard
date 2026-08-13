@@ -1198,10 +1198,13 @@ fn quick_access_open_editor(
     let window = app
         .get_webview_window(QUICK_ACCESS_EDITOR_LABEL)
         .ok_or_else(|| "Quick access editor window is unavailable".to_string())?;
-    window.center().map_err(|error| error.to_string())?;
-    window.show().map_err(|error| error.to_string())?;
-    window.set_focus().map_err(|error| error.to_string())?;
+    let _ = window.set_focusable(true);
     notify_quick_access_editor_item(&app, &item);
+    window.show().map_err(|error| error.to_string())?;
+    let _ = window.unminimize();
+    let _ = window.center();
+    let _ = window.set_always_on_top(true);
+    let _ = window.set_focus();
     Ok(true)
 }
 
@@ -1466,6 +1469,21 @@ fn settings_get_language(state: State<'_, RuntimeState>) -> String {
         .lock()
         .map(|settings| setting_string(&settings, "language", "ru"))
         .unwrap_or_else(|_| "ru".into())
+}
+
+#[tauri::command]
+fn settings_get_resolved_theme(app: AppHandle) -> String {
+    app.get_webview_window(MAIN_WINDOW_LABEL)
+        .and_then(|window| window.theme().ok())
+        .map(|theme| {
+            if matches!(theme, tauri::Theme::Dark) {
+                "dark"
+            } else {
+                "light"
+            }
+        })
+        .unwrap_or("light")
+        .to_string()
 }
 
 #[tauri::command]
@@ -1753,6 +1771,7 @@ pub fn run() {
             settings_set_launch_hidden,
             settings_get_launch_hidden,
             settings_get_language,
+            settings_get_resolved_theme,
             settings_set_language,
             settings_set_auto_start,
             settings_get_auto_start,

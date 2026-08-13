@@ -92,6 +92,24 @@ class CdpClient {
 
 const mockSource = String.raw`
 (() => {
+  const surface = new URLSearchParams(location.search).get('surface');
+  const originalMatchMedia = window.matchMedia.bind(window);
+  window.matchMedia = (query) => {
+    const result = originalMatchMedia(query);
+    if (query !== '(prefers-color-scheme: dark)' || !surface?.startsWith('quick-access')) {
+      return result;
+    }
+    return {
+      matches: true,
+      media: result.media,
+      onchange: null,
+      addListener: result.addListener?.bind(result),
+      removeListener: result.removeListener?.bind(result),
+      addEventListener: result.addEventListener.bind(result),
+      removeEventListener: result.removeEventListener.bind(result),
+      dispatchEvent: result.dispatchEvent.bind(result)
+    };
+  };
   const stale = [{
     id: 'legacy-local',
     type: 'text',
@@ -102,6 +120,8 @@ const mockSource = String.raw`
   try {
     localStorage.setItem('clipboardHistory', JSON.stringify(stale));
     localStorage.setItem('appLanguage', 'ru');
+    localStorage.removeItem('copyboard.appearance');
+    localStorage.removeItem('copyboard.resolvedAppearance');
   } catch {}
 
   const initialFavorite = {
@@ -129,10 +149,9 @@ const mockSource = String.raw`
     history: [],
     favorites: [initialFavorite],
     calls: [],
+    resolvedTheme: 'light',
     edgeVisible: true,
-    editorItem: new URLSearchParams(location.search).get('surface') === 'quick-access-editor'
-      ? initialFavorite
-      : null
+    editorItem: null
   };
   const callbacks = new Map();
   const listeners = new Map();
@@ -196,6 +215,8 @@ const mockSource = String.raw`
           return copy(state.settings);
         case 'settings_get_language':
           return state.settings.language;
+        case 'settings_get_resolved_theme':
+          return state.resolvedTheme;
         case 'settings_set_language':
           state.settings.language = args.language;
           return true;
@@ -287,6 +308,15 @@ const mockSource = String.raw`
     setFavorites(items) {
       state.favorites = copy(items);
       emit('copyboard:favorites.changed', state.favorites);
+    },
+    setEditorItem(item, notify = false) {
+      state.editorItem = copy(item);
+      if (notify) {
+        window.dispatchEvent(new CustomEvent(
+          'copyboard:quickAccess.editorItem.native',
+          { detail: copy(item) },
+        ));
+      }
     },
     setEdge(visible) {
       state.edgeVisible = visible;
@@ -432,6 +462,19 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
     'initial drawer favorite',
   );
 
+  const initialTheme = await cdp.evaluate(`({
+    theme: document.documentElement.dataset.theme,
+    mode: document.documentElement.dataset.themeMode,
+    background: getComputedStyle(document.querySelector('.quick-drawer__items')).backgroundColor,
+    resolvedThemeCalls: window.__copyboardHarness.state.calls
+      .filter((call) => call.command === 'settings_get_resolved_theme').length
+  })`);
+  assert(initialTheme.theme === 'light'
+    && initialTheme.mode === 'system'
+    && initialTheme.background === 'rgb(255, 255, 255)'
+    && initialTheme.resolvedThemeCalls >= 1,
+  `Clean-start drawer ignored the main window theme: ${JSON.stringify(initialTheme)}`);
+
   const initialWidth = await cdp.evaluate('document.querySelector(".quick-drawer").getBoundingClientRect().width');
   assert(initialWidth === 278, `Initial drawer width is ${initialWidth}, expected 278`);
 
@@ -480,7 +523,20 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
     && drawerAfterEditorRequest.closeRequested,
   `Drawer still owns or moves with the editor: ${JSON.stringify(drawerAfterEditorRequest)}`);
 
-  await navigate(cdp, `${baseUrl}?surface=quick-access-editor`, '.frequent-modal');
+  await navigate(cdp, `${baseUrl}?surface=quick-access-editor`, '#root');
+  const editorInitiallyHidden = await cdp.evaluate('document.querySelector(".frequent-modal") === null');
+  assert(editorInitiallyHidden, 'Editor surface should remain empty until an item is requested');
+  await cdp.evaluate(`(() => {
+    window.__copyboardHarness.setEditorItem(
+      window.__copyboardHarness.state.favorites[0],
+      false,
+    );
+    window.dispatchEvent(new Event('focus'));
+  })()`);
+  await waitFor(
+    () => cdp.evaluate('Boolean(document.querySelector(".frequent-modal"))'),
+    'editor focus synchronization',
+  );
   await setViewport(cdp, 820, 620);
   await new Promise((resolve) => setTimeout(resolve, 80));
   const editor = await cdp.evaluate(`(() => {
@@ -677,6 +733,7 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
     `Empty drawer dimensions or message are incorrect: ${JSON.stringify(emptyDrawer)}`);
   return {
     initialWidth,
+    initialTheme,
     menuBounds,
     editor,
     drawerAfterEditorRequest,
