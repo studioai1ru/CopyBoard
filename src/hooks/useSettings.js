@@ -12,10 +12,10 @@ const DEFAULTS = {
   clearAllHotkey: 'Ctrl+Shift+Delete',
   maxItems: 100,
   autoDelete: 'never',
-  theme: 'dark',
+  theme: 'system',
 };
 
-const THEMES = ['dark', 'light'];
+const THEMES = ['system', 'dark', 'light'];
 
 function readLegacyLocal() {
   try {
@@ -184,9 +184,9 @@ export function useSettings({ theme, handleThemeChange, availableThemes = THEMES
 
     const api = desktop();
     if (api?.settings?.save) {
-      await api.settings.save({ ...defaults, theme: 'dark' });
+      await api.settings.save({ ...defaults, theme: 'system' });
     }
-    await handleThemeChange('dark');
+    await handleThemeChange('system');
   }, [handleThemeChange]);
 
   return {

@@ -62,6 +62,14 @@ export const ru = {
     },
   },
 
+  quickAccess: {
+    title: 'Шаблоны',
+    hint: 'Выберите значение — оно скопируется и появится в истории.',
+    empty: 'Добавьте шаблоны в избранное CopyBoard.',
+    copy: 'Скопировать «{{label}}»',
+    copied: 'Скопировано',
+  },
+
   item: {
     text: 'Текст',
     image: 'Изображение',
@@ -123,6 +131,7 @@ export const ru = {
     appearance: {
       theme: 'Тема',
       themes: {
+        system: 'Системная',
         dark: 'Тёмная',
         light: 'Светлая',
       },

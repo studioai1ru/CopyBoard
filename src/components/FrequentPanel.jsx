@@ -114,7 +114,12 @@ const FrequentPanel = ({ items, onCopy, onEdit, onDelete, onReorder }) => {
   const isImageItem = (item) => item.content?.startsWith('data:image/');
 
   const handleCopy = async (item) => {
-    await onCopy(item.content, isImageItem(item) ? 'image' : 'text');
+    const didCopy = await onCopy(
+      item.content,
+      isImageItem(item) ? 'image' : 'text',
+      { recordHistory: true },
+    );
+    if (!didCopy) return;
     setCopiedId(item.id);
     setTimeout(() => setCopiedId(null), 1200);
   };

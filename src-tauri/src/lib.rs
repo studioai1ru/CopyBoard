@@ -21,8 +21,8 @@ use std::{
 use tauri::{
     menu::{MenuBuilder, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, PhysicalPosition, Position, Runtime, State, WebviewWindow,
-    WindowEvent,
+    AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, Position, Runtime, Size, State,
+    WebviewWindow, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -36,6 +36,9 @@ const MAX_TEXT_CHARS: usize = 750_000;
 const MAX_IMAGE_CHARS: usize = 40_000_000;
 const POLL_MS: u64 = 420;
 const DEFAULT_SUPPRESS_MS: i64 = 4_000;
+const QUICK_ACCESS_LABEL: &str = "quick-access";
+const QUICK_ACCESS_HEIGHT: f64 = 280.0;
+const QUICK_ACCESS_HOT_ZONE: f64 = 8.0;
 
 struct ClipboardRuntime {
     running: Arc<AtomicBool>,
@@ -63,6 +66,7 @@ struct RuntimeState {
     clipboard: ClipboardRuntime,
     quitting: AtomicBool,
     initial_hidden: AtomicBool,
+    quick_access_animation: Arc<AtomicU64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -106,7 +110,7 @@ fn defaults() -> Value {
         "quickAccessHotkey": "Ctrl+Shift+V",
         "clearAllHotkey": "Ctrl+Shift+Delete",
         "viewMode": "list",
-        "theme": "dark",
+        "theme": "system",
         "maxItems": 100,
         "autoDelete": "never"
     })
@@ -494,6 +498,18 @@ fn write_clipboard_image(runtime: &ClipboardRuntime, data_url: String) -> Result
     Ok(true)
 }
 
+fn emit_forced_capture<R: Runtime>(app: &AppHandle<R>, content: &str, kind: &str) {
+    let _ = app.emit(
+        "copyboard:clip.capture",
+        json!({
+            "type": kind,
+            "content": content,
+            "timestamp": Utc::now().to_rfc3339(),
+            "force": true
+        }),
+    );
+}
+
 fn reveal_window<R: Runtime>(app: &AppHandle<R>, focus_search: bool) {
     let Some(window) = app.get_webview_window("main") else {
         return;
@@ -669,10 +685,21 @@ fn rebuild_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
                         .and_then(|item| item.get("content"))
                         .and_then(Value::as_str)
                     {
-                        if content.starts_with("data:image/") {
-                            let _ = write_clipboard_image(&state.clipboard, content.to_string());
+                        let (copied, kind) = if content.starts_with("data:image/") {
+                            (
+                                write_clipboard_image(&state.clipboard, content.to_string())
+                                    .unwrap_or(false),
+                                "image",
+                            )
                         } else {
-                            let _ = write_clipboard_text(&state.clipboard, content.to_string());
+                            (
+                                write_clipboard_text(&state.clipboard, content.to_string())
+                                    .unwrap_or(false),
+                                "text",
+                            )
+                        };
+                        if copied {
+                            emit_forced_capture(app, content, kind);
                         }
                     }
                 }
@@ -807,6 +834,112 @@ fn window_hide(window: WebviewWindow) -> Result<(), String> {
     window.hide().map_err(|error| error.to_string())
 }
 
+fn quick_access_geometry(window: &WebviewWindow) -> Result<(i32, i32, i32, u32, u32), String> {
+    let monitor = match window
+        .current_monitor()
+        .map_err(|error| error.to_string())?
+    {
+        Some(monitor) => monitor,
+        None => window
+            .primary_monitor()
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "Primary monitor is unavailable".to_string())?,
+    };
+    let scale = monitor.scale_factor();
+    let height = (QUICK_ACCESS_HEIGHT * scale).round().max(1.0) as u32;
+    let hot_zone = (QUICK_ACCESS_HOT_ZONE * scale).round().max(1.0) as i32;
+    let position = monitor.position();
+    let size = monitor.size();
+    let open_y = position.y;
+    let closed_y = open_y - height as i32 + hot_zone;
+    Ok((position.x, open_y, closed_y, size.width, height))
+}
+
+#[tauri::command]
+fn quick_access_ready(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+) -> Result<bool, String> {
+    let window = app
+        .get_webview_window(QUICK_ACCESS_LABEL)
+        .ok_or_else(|| "Quick access window is unavailable".to_string())?;
+    state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
+    let (x, _open_y, closed_y, width, height) = quick_access_geometry(&window)?;
+    window
+        .set_size(Size::Physical(PhysicalSize::new(width, height)))
+        .map_err(|error| error.to_string())?;
+    window
+        .set_position(Position::Physical(PhysicalPosition::new(x, closed_y)))
+        .map_err(|error| error.to_string())?;
+    let _ = window.set_focusable(false);
+    let _ = window.set_always_on_top(true);
+    window.show().map_err(|error| error.to_string())?;
+    Ok(true)
+}
+
+#[tauri::command]
+fn quick_access_set_open(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    open: bool,
+    reduce_motion: Option<bool>,
+) -> Result<bool, String> {
+    let window = app
+        .get_webview_window(QUICK_ACCESS_LABEL)
+        .ok_or_else(|| "Quick access window is unavailable".to_string())?;
+    let (x, open_y, closed_y, width, height) = quick_access_geometry(&window)?;
+    window
+        .set_size(Size::Physical(PhysicalSize::new(width, height)))
+        .map_err(|error| error.to_string())?;
+
+    let target_y = if open { open_y } else { closed_y };
+    let generation = state
+        .quick_access_animation
+        .fetch_add(1, Ordering::SeqCst)
+        + 1;
+    let animation = Arc::clone(&state.quick_access_animation);
+
+    if reduce_motion.unwrap_or(false) {
+        window
+            .set_position(Position::Physical(PhysicalPosition::new(x, target_y)))
+            .map_err(|error| error.to_string())?;
+        return Ok(true);
+    }
+
+    let start_y = window
+        .outer_position()
+        .map(|position| position.y)
+        .unwrap_or(if open { closed_y } else { open_y });
+    let steps = if open { 16 } else { 11 };
+    let frame_ms = if open { 15 } else { 14 };
+    thread::spawn(move || {
+        for step in 1..=steps {
+            if animation.load(Ordering::SeqCst) != generation {
+                return;
+            }
+            let progress = step as f64 / steps as f64;
+            let eased = if open {
+                1.0 - (1.0 - progress).powi(3)
+            } else {
+                progress.powi(3)
+            };
+            let y = start_y as f64 + (target_y - start_y) as f64 * eased;
+            if window
+                .set_position(Position::Physical(PhysicalPosition::new(
+                    x,
+                    y.round() as i32,
+                )))
+                .is_err()
+            {
+                return;
+            }
+            thread::sleep(Duration::from_millis(frame_ms));
+        }
+    });
+
+    Ok(true)
+}
+
 #[tauri::command]
 fn clip_start(app: AppHandle, state: State<'_, RuntimeState>) -> bool {
     start_clipboard_watcher(app, &state.clipboard);
@@ -835,13 +968,31 @@ fn clip_read_image() -> Option<String> {
 }
 
 #[tauri::command]
-fn clip_write_text(state: State<'_, RuntimeState>, text: String) -> Result<bool, String> {
-    write_clipboard_text(&state.clipboard, text)
+fn clip_write_text(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    text: String,
+    record_history: Option<bool>,
+) -> Result<bool, String> {
+    let copied = write_clipboard_text(&state.clipboard, text.clone())?;
+    if copied && record_history.unwrap_or(false) {
+        emit_forced_capture(&app, &text, "text");
+    }
+    Ok(copied)
 }
 
 #[tauri::command]
-fn clip_write_image(state: State<'_, RuntimeState>, data_url: String) -> Result<bool, String> {
-    write_clipboard_image(&state.clipboard, data_url)
+fn clip_write_image(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    data_url: String,
+    record_history: Option<bool>,
+) -> Result<bool, String> {
+    let copied = write_clipboard_image(&state.clipboard, data_url.clone())?;
+    if copied && record_history.unwrap_or(false) {
+        emit_forced_capture(&app, &data_url, "image");
+    }
+    Ok(copied)
 }
 
 #[tauri::command]
@@ -1055,6 +1206,7 @@ fn favorites_save(
 ) -> Result<Vec<Value>, String> {
     save_json(&favorites_path(&state), &Value::Array(items.clone()))?;
     rebuild_tray(&app)?;
+    let _ = app.emit("copyboard:favorites.changed", items.clone());
     Ok(items)
 }
 
@@ -1086,6 +1238,7 @@ pub fn run() {
                 clipboard: ClipboardRuntime::default(),
                 quitting: AtomicBool::new(false),
                 initial_hidden: AtomicBool::new(launch_hidden),
+                quick_access_animation: Arc::new(AtomicU64::new(0)),
             };
             app.manage(state);
             if !cfg!(debug_assertions) {
@@ -1103,6 +1256,8 @@ pub fn run() {
             window_is_maximized,
             window_show,
             window_hide,
+            quick_access_ready,
+            quick_access_set_open,
             clip_start,
             clip_stop,
             clip_read_text,
@@ -1130,8 +1285,16 @@ pub fn run() {
             favorites_load,
             favorites_save
         ])
-        .on_window_event(|window, event| match event {
-            WindowEvent::CloseRequested { api, .. } => {
+        .on_window_event(|window, event| {
+            if window.label() == QUICK_ACCESS_LABEL {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                }
+                return;
+            }
+
+            match event {
+                WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 let app = window.app_handle();
                 let state = app.state::<RuntimeState>();
@@ -1149,15 +1312,16 @@ pub fn run() {
                 } else {
                     close_application(app, &state);
                 }
-            }
-            WindowEvent::Resized(_) => {
+                }
+                WindowEvent::Resized(_) => {
                 if let Ok(maximized) = window.is_maximized() {
                     let _ = window
                         .app_handle()
                         .emit("copyboard:window.maximized", maximized);
                 }
+                }
+                _ => {}
             }
-            _ => {}
         })
         .build(tauri::generate_context!())
         .expect("error while building CopyBoard");

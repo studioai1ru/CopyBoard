@@ -24,7 +24,7 @@ function App() {
   const [editingEntry, setEditingEntry] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [editingFavorite, setEditingFavorite] = useState(null);
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState(() => appearance.getCurrentTheme());
   const [isThemeChanging, setIsThemeChanging] = useState(false);
   const searchInputRef = useRef(null);
   const bootLanguageRef = useRef(null);
@@ -32,7 +32,7 @@ function App() {
   useEffect(() => {
     const boot = async () => {
       const current = appearance.getCurrentTheme();
-      const safe = ['dark', 'light'].includes(current) ? current : 'dark';
+      const safe = ['system', 'dark', 'light'].includes(current) ? current : 'system';
       setTheme(safe);
       await appearance.applyTheme(safe);
     };
@@ -44,8 +44,8 @@ function App() {
   }, []);
 
   const handleThemeChange = useCallback(async (newTheme) => {
-    if (newTheme === theme || isThemeChanging) return;
-    if (!['dark', 'light'].includes(newTheme)) return;
+    if (isThemeChanging) return;
+    if (!['system', 'dark', 'light'].includes(newTheme)) return;
 
     try {
       setIsThemeChanging(true);
@@ -56,7 +56,7 @@ function App() {
     } finally {
       setIsThemeChanging(false);
     }
-  }, [isThemeChanging, theme]);
+  }, [isThemeChanging]);
 
   const {
     language,

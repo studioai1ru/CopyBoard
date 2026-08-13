@@ -16,6 +16,7 @@
     "dist:win": "node scripts/package-tauri.mjs win",
     "dist:mac": "node scripts/package-tauri.mjs mac",
     "lint": "eslint .",
+    "test": "node --test",
     "preview": "vite preview",
     "release:patch": "node scripts/release-patch.mjs",
     "tauri": "tauri",

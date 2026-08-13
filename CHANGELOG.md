@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Added a theme-aware top-edge drawer for copying favorite templates from anywhere on the primary screen.
+
+### Changed
+
+- Added a System appearance mode that follows the operating system and is used by default on new installations and after resetting settings.
+
+### Fixed
+
+- Copying a favorite template now refreshes it at the top of clipboard history, including copies made from the tray and top-edge drawer.
+- Clipboard history cards now highlight the full card in green after a successful copy.
+
 ## [1.0.5] - 2026-08-13
 
 ### Changed

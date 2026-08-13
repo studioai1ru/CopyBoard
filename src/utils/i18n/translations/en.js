@@ -62,6 +62,14 @@ export const en = {
     },
   },
 
+  quickAccess: {
+    title: 'Templates',
+    hint: 'Choose a value to copy it and add it to history.',
+    empty: 'Add templates to CopyBoard favorites.',
+    copy: 'Copy “{{label}}”',
+    copied: 'Copied',
+  },
+
   item: {
     text: 'Text',
     image: 'Image',
@@ -123,6 +131,7 @@ export const en = {
     appearance: {
       theme: 'Theme',
       themes: {
+        system: 'System',
         dark: 'Dark',
         light: 'Light',
       },

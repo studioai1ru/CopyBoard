@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   classifyPayload,
-  createEntryId,
+  createHistoryEntry,
   makePreview,
+  mergeHistoryEntry,
   trimHistory,
 } from '../utils/clipboardUtils';
 import { desktop } from '../utils/desktop';
@@ -32,26 +33,20 @@ export function useClipboardHistory({ maxItems, autoDelete }) {
       const stamp = payload.timestamp;
       const kind = classifyPayload(content, typeHint);
       const mark = fingerprint(kind, content);
+      const force = payload.force === true;
 
-      if (mark === lastFingerprintRef.current) return;
-      if (historyRef.current[0]?.content === content) {
+      if (!force && mark === lastFingerprintRef.current) return;
+      if (!force && historyRef.current[0]?.content === content) {
         lastFingerprintRef.current = mark;
         return;
       }
 
-      const entry = {
-        id: createEntryId(),
-        content,
-        type: kind,
-        timestamp: stamp,
-        preview: makePreview(content, kind),
-      };
+      const entry = createHistoryEntry({ content, type: kind, timestamp: stamp });
 
       lastFingerprintRef.current = mark;
-      setClipboardHistory((prev) => {
-        const withoutDupes = prev.filter((row) => row.content !== content);
-        return trimHistory([entry, ...withoutDupes], { maxItems, autoDelete });
-      });
+      setClipboardHistory((prev) => (
+        mergeHistoryEntry(prev, entry, { maxItems, autoDelete })
+      ));
     },
     [autoDelete, maxItems],
   );
@@ -83,14 +78,14 @@ export function useClipboardHistory({ maxItems, autoDelete }) {
     setClipboardHistory((prev) => prev.filter((row) => row.id !== id));
   }, []);
 
-  const copyToClipboard = useCallback(async (content, type) => {
+  const copyToClipboard = useCallback(async (content, type, { recordHistory = false } = {}) => {
     const api = desktop();
     try {
       if (api?.clip) {
         // Main process suppress gate prevents echo into history.
-        if (type === 'image') await api.clip.writeImage(content);
-        else await api.clip.writeText(content);
-        return;
+        if (type === 'image') await api.clip.writeImage(content, recordHistory);
+        else await api.clip.writeText(content, recordHistory);
+        return true;
       }
 
       if (type === 'image') {
@@ -100,10 +95,20 @@ export function useClipboardHistory({ maxItems, autoDelete }) {
       } else {
         await navigator.clipboard.writeText(content);
       }
+      if (recordHistory) {
+        commitCapture({
+          content,
+          type,
+          timestamp: new Date().toISOString(),
+          force: true,
+        });
+      }
+      return true;
     } catch (error) {
       console.error('Copy failed:', error);
+      return false;
     }
-  }, []);
+  }, [commitCapture]);
 
   const handleSaveEdit = useCallback((id, newContent) => {
     const kind = classifyPayload(newContent);

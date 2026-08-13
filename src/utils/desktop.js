@@ -34,8 +34,12 @@ const api = {
     stop: () => invoke('clip_stop'),
     readText: () => invoke('clip_read_text'),
     readImage: () => invoke('clip_read_image'),
-    writeText: (text) => invoke('clip_write_text', { text }),
-    writeImage: (dataUrl) => invoke('clip_write_image', { dataUrl }),
+    writeText: (text, recordHistory = false) => (
+      invoke('clip_write_text', { text, recordHistory })
+    ),
+    writeImage: (dataUrl, recordHistory = false) => (
+      invoke('clip_write_image', { dataUrl, recordHistory })
+    ),
     suppress: (ms) => invoke('clip_suppress', { ms }),
     onCapture: (callback) => subscribe('copyboard:clip.capture', callback),
   },
@@ -67,6 +71,13 @@ const api = {
   favorites: {
     load: () => invoke('favorites_load'),
     save: (items) => invoke('favorites_save', { items }),
+    onChanged: (callback) => subscribe('copyboard:favorites.changed', callback),
+  },
+  quickAccess: {
+    ready: () => invoke('quick_access_ready'),
+    setOpen: (open, reduceMotion = false) => (
+      invoke('quick_access_set_open', { open, reduceMotion })
+    ),
   },
   ui: {
     onFocusSearch: (callback) => subscribe('copyboard:ui.focusSearch', callback),

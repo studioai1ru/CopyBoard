@@ -187,6 +187,7 @@ const SettingsModal = ({
           <section className="preference-card">
             <h3>{t('settings.sections.appearance')}</h3>
             <SelectField id="theme-mode" label={t('settings.appearance.theme')} value={current.theme} onChange={change.theme}>
+              <option value="system">{t('settings.appearance.themes.system')}</option>
               <option value="dark">{t('settings.appearance.themes.dark')}</option>
               <option value="light">{t('settings.appearance.themes.light')}</option>
             </SelectField>

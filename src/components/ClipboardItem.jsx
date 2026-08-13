@@ -31,7 +31,8 @@ const ClipboardItem = ({
 
   const copyEntry = async () => {
     try {
-      await onCopy(item.content, type);
+      const didCopy = await onCopy(item.content, type);
+      if (!didCopy) return;
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     } catch (error) {
@@ -65,7 +66,7 @@ const ClipboardItem = ({
 
   return (
     <article
-      className={`clip-card clip-card--${type} clip-card--${viewMode}`}
+      className={`clip-card clip-card--${type} clip-card--${viewMode} ${copied ? 'is-copied' : ''}`}
       style={{ '--entry-accent': typeMeta.bg, '--entry-accent-text': typeMeta.fg }}
     >
       <header className="clip-card__header">

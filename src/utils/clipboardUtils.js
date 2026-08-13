@@ -55,6 +55,19 @@ export function makePreview(body, kind) {
   return `${text.slice(0, 120)}…`;
 }
 
+/** Normalize a clipboard capture into the history row shape used by the UI. */
+export function createHistoryEntry({ content, type, timestamp } = {}) {
+  const kind = classifyPayload(content, type);
+  const normalizedContent = String(content || '');
+  return {
+    id: createEntryId(),
+    content: normalizedContent,
+    type: kind,
+    timestamp: timestamp || new Date().toISOString(),
+    preview: makePreview(normalizedContent, kind),
+  };
+}
+
 const RETENTION_MS = {
   never: 0,
   '5min': 5 * 60 * 1000,
@@ -88,4 +101,11 @@ export function trimHistory(entries, { maxItems = 100, autoDelete = 'never' } = 
   });
 
   return next.slice(0, Number(maxItems) || 100);
+}
+
+/** Put a capture at the top, refreshing an existing value instead of duplicating it. */
+export function mergeHistoryEntry(entries, entry, options) {
+  const withoutSameContent = (Array.isArray(entries) ? entries : [])
+    .filter((row) => row.content !== entry.content);
+  return trimHistory([entry, ...withoutSameContent], options);
 }

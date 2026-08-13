@@ -1,5 +1,5 @@
 :root {
-  color-scheme: dark;
+  color-scheme: light dark;
   --bg-primary: #0c1425;
   --bg-secondary: #111d33;
   --bg-tertiary: #192842;
@@ -13,6 +13,7 @@
   --border-primary: #293b59;
   --border-secondary: #3a4f70;
   --success: #35c77a;
+  --success-muted: rgba(53, 199, 122, 0.18);
   --error: #ff6675;
   --font-family-base: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-family-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
@@ -48,6 +49,10 @@
   --z-modal: 50;
 }
 
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 [data-theme="light"] {
   color-scheme: light;
   --bg-primary: #eef4fb;
@@ -63,6 +68,7 @@
   --border-primary: #cbd8e8;
   --border-secondary: #aebfd4;
   --success: #137a46;
+  --success-muted: rgba(19, 122, 70, 0.14);
   --error: #c93647;
   --shadow-sm: 0 1px 2px rgba(29, 55, 86, 0.1);
   --shadow-md: 0 12px 30px rgba(29, 55, 86, 0.14);

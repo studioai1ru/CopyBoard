@@ -29,6 +29,15 @@ export function useFrequentItems() {
     };
   }, []);
 
+  useEffect(() => {
+    const api = desktop();
+    if (!api?.favorites?.onChanged) return undefined;
+    return api.favorites.onChanged((nextItems) => {
+      setItems(Array.isArray(nextItems) ? nextItems : []);
+      setLoaded(true);
+    });
+  }, []);
+
   const persist = useCallback(async (nextItems) => {
     setItems(nextItems);
     const api = desktop();
