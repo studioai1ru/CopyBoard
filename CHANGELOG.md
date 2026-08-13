@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- The top-edge drawer now uses a gentler, slightly longer opening motion while remaining responsive.
+- The drawer checks the invisible top-edge hot zone only when its visible edge is disabled, eliminating that background work in the default configuration.
+
+### Fixed
+
+- Restored automatic clipboard history capture with platform-native change monitoring and persistence, without periodically polling history from the interface.
+
 ## [1.0.9] - 2026-08-13
 
 ### Added

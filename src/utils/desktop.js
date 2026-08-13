@@ -33,8 +33,6 @@ const api = {
     onMaximizedChange: (callback) => subscribe('copyboard:window.maximized', callback),
   },
   clip: {
-    start: () => invoke('clip_start'),
-    stop: () => invoke('clip_stop'),
     readText: () => invoke('clip_read_text'),
     readImage: () => invoke('clip_read_image'),
     writeText: (text, recordHistory = false) => (
@@ -46,7 +44,6 @@ const api = {
     writeFiles: (files, recordHistory = false) => (
       invoke('clip_write_files', { files, recordHistory })
     ),
-    suppress: (ms) => invoke('clip_suppress', { ms }),
     onCapture: (callback, onReady) => (
       subscribe('copyboard:clip.capture', callback, onReady)
     ),
@@ -74,7 +71,6 @@ const api = {
     clear: () => invoke('history_clear'),
     migrate: (items) => invoke('history_migrate', { items }),
     onWipeShortcut: (callback) => subscribe('copyboard:history.wipeShortcut', callback),
-    onFlush: (callback) => subscribe('copyboard:history.flush', callback),
   },
   favorites: {
     load: () => invoke('favorites_load'),

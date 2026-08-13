@@ -1,7 +1,10 @@
 use arboard::{Clipboard, ImageData};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use chrono::Utc;
-use clipboard_rs::{Clipboard as FileClipboard, ClipboardContext};
+use clipboard_rs::{
+    Clipboard as FileClipboard, ClipboardContext, ClipboardHandler, ClipboardWatcher,
+    ClipboardWatcherContext, WatcherShutdown,
+};
 use image::{DynamicImage, ImageFormat, RgbaImage};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -13,7 +16,7 @@ use std::{
     io::Cursor,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
     thread,
@@ -35,8 +38,6 @@ const SETTINGS_FILE: &str = "settings.json";
 const FAVORITES_FILE: &str = "frequent-items.json";
 const MAX_TEXT_CHARS: usize = 750_000;
 const MAX_IMAGE_CHARS: usize = 40_000_000;
-const POLL_MS: u64 = 420;
-const DEFAULT_SUPPRESS_MS: i64 = 4_000;
 const QUICK_ACCESS_LABEL: &str = "quick-access";
 const QUICK_ACCESS_DEFAULT_WIDTH: u64 = 278;
 const QUICK_ACCESS_DEFAULT_HEIGHT: u64 = 64;
@@ -45,19 +46,15 @@ const QUICK_ACCESS_VISIBLE_EDGE_HEIGHT: f64 = 8.0;
 const QUICK_ACCESS_POLL_MS: u64 = 80;
 
 struct ClipboardRuntime {
-    running: Arc<AtomicBool>,
-    generation: Arc<AtomicU64>,
-    suppress_until: Arc<AtomicI64>,
     last_capture_key: Arc<Mutex<String>>,
+    watcher_shutdown: Mutex<Option<WatcherShutdown>>,
 }
 
 impl Default for ClipboardRuntime {
     fn default() -> Self {
         Self {
-            running: Arc::new(AtomicBool::new(false)),
-            generation: Arc::new(AtomicU64::new(0)),
-            suppress_until: Arc::new(AtomicI64::new(0)),
             last_capture_key: Arc::new(Mutex::new(String::new())),
+            watcher_shutdown: Mutex::new(None),
         }
     }
 }
@@ -65,10 +62,12 @@ impl Default for ClipboardRuntime {
 struct RuntimeState {
     data_dir: PathBuf,
     settings: Mutex<Value>,
+    history_io: Mutex<()>,
     clipboard: ClipboardRuntime,
     quitting: AtomicBool,
     initial_hidden: AtomicBool,
     quick_access_animation: Arc<AtomicU64>,
+    quick_access_watcher_generation: AtomicU64,
     quick_access_width: AtomicU64,
     quick_access_height: AtomicU64,
     quick_access_open: AtomicBool,
@@ -307,7 +306,7 @@ fn serialize_history_item(item: &Value, image_root: &Path) -> Value {
     serialized
 }
 
-fn history_load_inner(state: &RuntimeState) -> Vec<Value> {
+fn history_load_unlocked(state: &RuntimeState) -> Vec<Value> {
     let mut items = load_json(&history_path(state), json!([]))
         .as_array()
         .cloned()
@@ -319,13 +318,125 @@ fn history_load_inner(state: &RuntimeState) -> Vec<Value> {
     items
 }
 
-fn history_save_inner(state: &RuntimeState, items: &[Value]) -> Result<(), String> {
+fn history_save_unlocked(state: &RuntimeState, items: &[Value]) -> Result<(), String> {
     let image_root = images_dir(state);
     let serialized = items
         .iter()
         .map(|item| serialize_history_item(item, &image_root))
         .collect::<Vec<_>>();
     save_json(&history_path(state), &Value::Array(serialized))
+}
+
+fn history_load_inner(state: &RuntimeState) -> Vec<Value> {
+    let _guard = state.history_io.lock().ok();
+    history_load_unlocked(state)
+}
+
+fn history_save_inner(state: &RuntimeState, items: &[Value]) -> Result<(), String> {
+    let _guard = state.history_io.lock().ok();
+    history_save_unlocked(state, items)
+}
+
+fn retention_window_ms(mode: &str) -> i64 {
+    match mode {
+        "5min" => 5 * 60 * 1_000,
+        "15min" => 15 * 60 * 1_000,
+        "30min" => 30 * 60 * 1_000,
+        "1hour" => 60 * 60 * 1_000,
+        "2hours" => 2 * 60 * 60 * 1_000,
+        "6hours" => 6 * 60 * 60 * 1_000,
+        "12hours" => 12 * 60 * 60 * 1_000,
+        "1day" => 24 * 60 * 60 * 1_000,
+        "3days" => 3 * 24 * 60 * 60 * 1_000,
+        "7days" => 7 * 24 * 60 * 60 * 1_000,
+        "30days" => 30 * 24 * 60 * 60 * 1_000,
+        _ => 0,
+    }
+}
+
+fn capture_preview(kind: &str, content: &str) -> String {
+    if kind == "image" {
+        return String::new();
+    }
+
+    let mut preview = content.chars().take(120).collect::<String>();
+    if content.chars().count() > 120 {
+        preview.push('…');
+    }
+    preview
+}
+
+fn persist_clipboard_capture<R: Runtime>(app: &AppHandle<R>, capture: &ClipboardCapture) {
+    let state = app.state::<RuntimeState>();
+    let (max_items, retention_ms) = state
+        .settings
+        .lock()
+        .map(|settings| {
+            let max_items = settings
+                .get("maxItems")
+                .and_then(Value::as_u64)
+                .unwrap_or(100)
+                .clamp(1, 10_000) as usize;
+            let auto_delete = setting_string(&settings, "autoDelete", "never");
+            (max_items, retention_window_ms(&auto_delete))
+        })
+        .unwrap_or((100, 0));
+
+    let cutoff = Utc::now().timestamp_millis() - retention_ms;
+    let _history_guard = state.history_io.lock().ok();
+    let mut items = history_load_unlocked(&state);
+    items.retain(|item| {
+        if item.get("content").and_then(Value::as_str) == Some(capture.content.as_str()) {
+            return false;
+        }
+        if retention_ms == 0 {
+            return true;
+        }
+        item.get("timestamp")
+            .and_then(Value::as_str)
+            .and_then(|stamp| chrono::DateTime::parse_from_rfc3339(stamp).ok())
+            .is_some_and(|stamp| stamp.timestamp_millis() >= cutoff)
+    });
+
+    let mut hasher = DefaultHasher::new();
+    capture.kind.hash(&mut hasher);
+    capture.content.hash(&mut hasher);
+    capture.timestamp.hash(&mut hasher);
+    let entry = json!({
+        "id": format!("capture-{}-{:x}", Utc::now().timestamp_millis(), hasher.finish()),
+        "type": capture.kind,
+        "content": capture.content,
+        "preview": capture_preview(&capture.kind, &capture.content),
+        "timestamp": capture.timestamp,
+    });
+    items.insert(0, entry);
+    items.truncate(max_items);
+    if let Err(error) = history_save_unlocked(&state, &items) {
+        eprintln!("Failed to persist clipboard capture: {error}");
+    }
+}
+
+fn record_and_emit_capture<R: Runtime>(
+    app: &AppHandle<R>,
+    kind: &str,
+    content: String,
+    force: bool,
+) {
+    let capture = ClipboardCapture {
+        kind: kind.into(),
+        content,
+        timestamp: Utc::now().to_rfc3339(),
+    };
+    persist_clipboard_capture(app, &capture);
+    let _ = app.emit(
+        "copyboard:clip.capture",
+        json!({
+            "type": capture.kind,
+            "content": capture.content,
+            "timestamp": capture.timestamp,
+            "force": force,
+        }),
+    );
 }
 
 fn image_fingerprint(image: &ImageData<'_>) -> String {
@@ -414,128 +525,98 @@ fn capture_changed(last_capture_key: &Arc<Mutex<String>>, key: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn clipboard_baseline(runtime: &ClipboardRuntime) {
+fn capture_clipboard_change(app: &AppHandle) {
+    let state = app.state::<RuntimeState>();
+    let last_capture_key = &state.clipboard.last_capture_key;
+
     if let Some((_, payload)) = read_clipboard_file_references() {
-        set_last_capture_key(runtime, format!("file::{payload}"));
+        let key = format!("file::{payload}");
+        if capture_changed(last_capture_key, &key) {
+            record_and_emit_capture(app, "file", payload, false);
+        }
         return;
     }
 
-    let Ok(mut clipboard) = Clipboard::new() else {
-        return;
-    };
-    if let Ok(image) = clipboard.get_image() {
-        set_last_capture_key(runtime, format!("image::{}", image_fingerprint(&image)));
-        return;
+    if let Ok(mut clipboard) = Clipboard::new() {
+        if let Ok(image) = clipboard.get_image() {
+            let key = format!("image::{}", image_fingerprint(&image));
+            if capture_changed(last_capture_key, &key) {
+                if let Ok(data_url) = image_to_data_url(&image) {
+                    if data_url.len() > 120 && data_url.len() <= MAX_IMAGE_CHARS {
+                        record_and_emit_capture(app, "image", data_url, false);
+                    }
+                }
+            }
+            return;
+        }
+
+        if let Ok(text) = clipboard.get_text() {
+            if !text.trim().is_empty() {
+                let key = format!("text::{text}");
+                if capture_changed(last_capture_key, &key)
+                    && text.chars().count() <= MAX_TEXT_CHARS
+                {
+                    record_and_emit_capture(app, "text", text, false);
+                }
+                return;
+            }
+        }
     }
-    if let Ok(text) = clipboard.get_text() {
-        set_last_capture_key(runtime, format!("text::{text}"));
+
+    let _ = capture_changed(last_capture_key, "");
+}
+
+struct AppClipboardHandler {
+    app: AppHandle,
+}
+
+impl ClipboardHandler for AppClipboardHandler {
+    fn on_clipboard_change(&mut self) {
+        capture_clipboard_change(&self.app);
     }
 }
 
-fn start_clipboard_watcher(app: AppHandle, runtime: &ClipboardRuntime) {
-    if runtime.running.swap(true, Ordering::SeqCst) {
-        return;
+fn start_clipboard_watcher(app: AppHandle, runtime: &ClipboardRuntime) -> Result<(), String> {
+    let mut shutdown_slot = runtime
+        .watcher_shutdown
+        .lock()
+        .map_err(|error| error.to_string())?;
+    if shutdown_slot.is_some() {
+        return Ok(());
     }
-    clipboard_baseline(runtime);
-    let token = runtime.generation.fetch_add(1, Ordering::SeqCst) + 1;
-    let running = Arc::clone(&runtime.running);
-    let generation = Arc::clone(&runtime.generation);
-    let suppress_until = Arc::clone(&runtime.suppress_until);
-    let last_capture_key = Arc::clone(&runtime.last_capture_key);
 
-    thread::spawn(move || {
-        while running.load(Ordering::SeqCst) && generation.load(Ordering::SeqCst) == token {
-            if now_millis() >= suppress_until.load(Ordering::SeqCst) {
-                let mut captured = false;
-
-                if let Some((_, payload)) = read_clipboard_file_references() {
-                    let key = format!("file::{payload}");
-                    if capture_changed(&last_capture_key, &key) {
-                        let _ = app.emit(
-                            "copyboard:clip.capture",
-                            ClipboardCapture {
-                                kind: "file".into(),
-                                content: payload,
-                                timestamp: Utc::now().to_rfc3339(),
-                            },
-                        );
-                    }
-                    captured = true;
-                }
-
-                if !captured {
-                    if let Ok(mut clipboard) = Clipboard::new() {
-                        if let Ok(image) = clipboard.get_image() {
-                            let key = format!("image::{}", image_fingerprint(&image));
-                            if capture_changed(&last_capture_key, &key) {
-                                if let Ok(data_url) = image_to_data_url(&image) {
-                                    if data_url.len() > 120 && data_url.len() <= MAX_IMAGE_CHARS {
-                                        let _ = app.emit(
-                                            "copyboard:clip.capture",
-                                            ClipboardCapture {
-                                                kind: "image".into(),
-                                                content: data_url,
-                                                timestamp: Utc::now().to_rfc3339(),
-                                            },
-                                        );
-                                    }
-                                }
-                            }
-                            captured = true;
-                        } else if let Ok(text) = clipboard.get_text() {
-                            let trimmed = text.trim();
-                            if !trimmed.is_empty() {
-                                let key = format!("text::{text}");
-                                if capture_changed(&last_capture_key, &key)
-                                    && text.chars().count() <= MAX_TEXT_CHARS
-                                {
-                                    let _ = app.emit(
-                                        "copyboard:clip.capture",
-                                        ClipboardCapture {
-                                            kind: "text".into(),
-                                            content: text,
-                                            timestamp: Utc::now().to_rfc3339(),
-                                        },
-                                    );
-                                }
-                                captured = true;
-                            }
-                        }
-                    }
-                }
-
-                if !captured {
-                    let _ = capture_changed(&last_capture_key, "");
-                }
-            }
-            thread::sleep(Duration::from_millis(POLL_MS));
-        }
-    });
+    let mut watcher = ClipboardWatcherContext::new().map_err(|error| error.to_string())?;
+    let shutdown = watcher
+        .add_handler(AppClipboardHandler { app })
+        .get_shutdown_channel();
+    thread::Builder::new()
+        .name("clipboard-watcher".into())
+        .spawn(move || watcher.start_watch())
+        .map_err(|error| error.to_string())?;
+    *shutdown_slot = Some(shutdown);
+    Ok(())
 }
 
 fn stop_clipboard_watcher(runtime: &ClipboardRuntime) {
-    runtime.running.store(false, Ordering::SeqCst);
-    runtime.generation.fetch_add(1, Ordering::SeqCst);
-}
-
-fn suppress_clipboard(runtime: &ClipboardRuntime, milliseconds: i64) {
-    let until = now_millis() + milliseconds.max(0);
-    runtime.suppress_until.fetch_max(until, Ordering::SeqCst);
+    if let Ok(mut shutdown_slot) = runtime.watcher_shutdown.lock() {
+        if let Some(shutdown) = shutdown_slot.take() {
+            shutdown.stop();
+        }
+    }
 }
 
 fn write_clipboard_text(runtime: &ClipboardRuntime, text: String) -> Result<bool, String> {
-    suppress_clipboard(runtime, DEFAULT_SUPPRESS_MS);
     let mut clipboard = Clipboard::new().map_err(|error| error.to_string())?;
-    clipboard
-        .set_text(text.clone())
-        .map_err(|error| error.to_string())?;
     set_last_capture_key(runtime, format!("text::{text}"));
+    if let Err(error) = clipboard.set_text(text) {
+        set_last_capture_key(runtime, String::new());
+        return Err(error.to_string());
+    }
     Ok(true)
 }
 
 fn write_clipboard_image(runtime: &ClipboardRuntime, data_url: String) -> Result<bool, String> {
     let (pixels, width, height) = data_url_to_image(&data_url)?;
-    suppress_clipboard(runtime, DEFAULT_SUPPRESS_MS);
     let mut clipboard = Clipboard::new().map_err(|error| error.to_string())?;
     let image = ImageData {
         width,
@@ -543,10 +624,11 @@ fn write_clipboard_image(runtime: &ClipboardRuntime, data_url: String) -> Result
         bytes: Cow::Owned(pixels),
     };
     let key = image_fingerprint(&image);
-    clipboard
-        .set_image(image)
-        .map_err(|error| error.to_string())?;
     set_last_capture_key(runtime, format!("image::{key}"));
+    if let Err(error) = clipboard.set_image(image) {
+        set_last_capture_key(runtime, String::new());
+        return Err(error.to_string());
+    }
     Ok(true)
 }
 
@@ -561,25 +643,17 @@ fn write_clipboard_files(runtime: &ClipboardRuntime, files: Vec<String>) -> Resu
     }
 
     let payload = serde_json::to_string(&files).map_err(|error| error.to_string())?;
-    suppress_clipboard(runtime, DEFAULT_SUPPRESS_MS);
     let clipboard = ClipboardContext::new().map_err(|error| error.to_string())?;
-    clipboard
-        .set_files(files)
-        .map_err(|error| error.to_string())?;
     set_last_capture_key(runtime, format!("file::{payload}"));
+    if let Err(error) = clipboard.set_files(files) {
+        set_last_capture_key(runtime, String::new());
+        return Err(error.to_string());
+    }
     Ok(true)
 }
 
 fn emit_forced_capture<R: Runtime>(app: &AppHandle<R>, content: &str, kind: &str) {
-    let _ = app.emit(
-        "copyboard:clip.capture",
-        json!({
-            "type": kind,
-            "content": content,
-            "timestamp": Utc::now().to_rfc3339(),
-            "force": true
-        }),
-    );
+    record_and_emit_capture(app, kind, content.to_string(), true);
 }
 
 fn reveal_window<R: Runtime>(app: &AppHandle<R>, focus_search: bool) {
@@ -620,7 +694,6 @@ fn reveal_near_cursor<R: Runtime>(app: &AppHandle<R>) {
 fn close_application<R: Runtime>(app: &AppHandle<R>, state: &RuntimeState) {
     state.quitting.store(true, Ordering::SeqCst);
     stop_clipboard_watcher(&state.clipboard);
-    let _ = app.emit("copyboard:history.flush", ());
     app.exit(0);
 }
 
@@ -984,6 +1057,17 @@ fn position_quick_access(
 }
 
 fn start_quick_access_watcher(app: AppHandle) {
+    let token = {
+        let state = app.state::<RuntimeState>();
+        if state.quick_access_edge_visible.load(Ordering::SeqCst) {
+            return;
+        }
+        state
+            .quick_access_watcher_generation
+            .fetch_add(1, Ordering::SeqCst)
+            + 1
+    };
+
     thread::spawn(move || {
         let mut cursor_was_in_zone = false;
 
@@ -992,6 +1076,14 @@ fn start_quick_access_watcher(app: AppHandle) {
                 return;
             };
             let state = app.state::<RuntimeState>();
+            if state
+                .quick_access_watcher_generation
+                .load(Ordering::SeqCst)
+                != token
+                || state.quick_access_edge_visible.load(Ordering::SeqCst)
+            {
+                return;
+            }
 
             if !state.quick_access_ready.load(Ordering::SeqCst)
                 || state.quick_access_open.load(Ordering::SeqCst)
@@ -1070,6 +1162,13 @@ fn quick_access_set_edge_visible(
     state
         .quick_access_edge_visible
         .store(visible, Ordering::SeqCst);
+    if visible {
+        state
+            .quick_access_watcher_generation
+            .fetch_add(1, Ordering::SeqCst);
+    } else {
+        start_quick_access_watcher(app.clone());
+    }
 
     if state.quick_access_ready.load(Ordering::SeqCst) {
         if let Some(window) = app.get_webview_window(QUICK_ACCESS_LABEL) {
@@ -1116,7 +1215,7 @@ fn quick_access_set_open(
         .outer_position()
         .map(|position| position.y)
         .unwrap_or(if open { closed_y } else { open_y });
-    let steps = if open { 20 } else { 16 };
+    let steps = if open { 22 } else { 16 };
     let frame_ms = 14;
     thread::spawn(move || {
         for step in 1..=steps {
@@ -1125,7 +1224,7 @@ fn quick_access_set_open(
             }
             let progress = step as f64 / steps as f64;
             let eased = if open {
-                1.0 - (1.0 - progress).powi(3)
+                (progress * std::f64::consts::FRAC_PI_2).sin()
             } else {
                 progress.powi(3)
             };
@@ -1144,18 +1243,6 @@ fn quick_access_set_open(
     });
 
     Ok(true)
-}
-
-#[tauri::command]
-fn clip_start(app: AppHandle, state: State<'_, RuntimeState>) -> bool {
-    start_clipboard_watcher(app, &state.clipboard);
-    true
-}
-
-#[tauri::command]
-fn clip_stop(state: State<'_, RuntimeState>) -> bool {
-    stop_clipboard_watcher(&state.clipboard);
-    true
 }
 
 #[tauri::command]
@@ -1214,12 +1301,6 @@ fn clip_write_files(
         emit_forced_capture(&app, &payload, "file");
     }
     Ok(copied)
-}
-
-#[tauri::command]
-fn clip_suppress(state: State<'_, RuntimeState>, ms: Option<i64>) -> bool {
-    suppress_clipboard(&state.clipboard, ms.unwrap_or(DEFAULT_SUPPRESS_MS));
-    true
 }
 
 #[tauri::command]
@@ -1382,6 +1463,7 @@ fn history_save(state: State<'_, RuntimeState>, items: Vec<Value>) -> Result<boo
 
 #[tauri::command]
 fn history_clear(state: State<'_, RuntimeState>) -> Result<bool, String> {
+    let _guard = state.history_io.lock().ok();
     let path = history_path(&state);
     if path.exists() {
         fs::remove_file(path).map_err(|error| error.to_string())?;
@@ -1456,10 +1538,12 @@ pub fn run() {
             let state = RuntimeState {
                 data_dir,
                 settings: Mutex::new(settings.clone()),
+                history_io: Mutex::new(()),
                 clipboard: ClipboardRuntime::default(),
                 quitting: AtomicBool::new(false),
                 initial_hidden: AtomicBool::new(launch_hidden),
                 quick_access_animation: Arc::new(AtomicU64::new(0)),
+                quick_access_watcher_generation: AtomicU64::new(0),
                 quick_access_width: AtomicU64::new(QUICK_ACCESS_DEFAULT_WIDTH),
                 quick_access_height: AtomicU64::new(QUICK_ACCESS_DEFAULT_HEIGHT),
                 quick_access_open: AtomicBool::new(false),
@@ -1471,6 +1555,9 @@ pub fn run() {
                 )),
             };
             app.manage(state);
+            let runtime = app.state::<RuntimeState>();
+            start_clipboard_watcher(app.handle().clone(), &runtime.clipboard)
+                .map_err(std::io::Error::other)?;
             start_quick_access_watcher(app.handle().clone());
             if !cfg!(debug_assertions) {
                 let _ = sync_autostart(app.handle(), auto_start);
@@ -1491,14 +1578,11 @@ pub fn run() {
             quick_access_configure,
             quick_access_set_edge_visible,
             quick_access_set_open,
-            clip_start,
-            clip_stop,
             clip_read_text,
             clip_read_image,
             clip_write_text,
             clip_write_image,
             clip_write_files,
-            clip_suppress,
             settings_get,
             settings_save,
             settings_set_close_mode,
