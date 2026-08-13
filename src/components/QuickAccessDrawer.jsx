@@ -14,6 +14,7 @@ import { appearance } from '../utils/appearance';
 import { classifyPayload } from '../utils/clipboardUtils';
 import { parseFileReferences } from '../utils/fileReferences';
 import FavoriteTypeIcon from './FavoriteTypeIcon';
+import FrequentEditModal from './FrequentEditModal';
 import '../scss/QuickAccessDrawer.scss';
 
 const COPY_FEEDBACK_MS = 240;
@@ -24,9 +25,16 @@ const afterLayout = () => new Promise((resolve) => {
 
 function QuickAccessDrawer({ edgeVisible }) {
   const { t } = useLanguage();
-  const { items, loaded, refreshItems, deleteItem } = useFrequentItems();
+  const {
+    items,
+    loaded,
+    refreshItems,
+    updateItem,
+    deleteItem,
+  } = useFrequentItems();
   const [copiedId, setCopiedId] = useState(null);
   const [menu, setMenu] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
   const panelRef = useRef(null);
   const menuRef = useRef(null);
   const closeTimerRef = useRef(null);
@@ -45,6 +53,10 @@ function QuickAccessDrawer({ edgeVisible }) {
   useEffect(() => {
     if (!menu) return undefined;
 
+    const focusFrame = requestAnimationFrame(() => {
+      menuRef.current?.querySelector('button')?.focus();
+    });
+
     const close = (event) => {
       if (menuRef.current?.contains(event.target)) return;
       setMenu(null);
@@ -52,6 +64,7 @@ function QuickAccessDrawer({ edgeVisible }) {
 
     document.addEventListener('mousedown', close);
     return () => {
+      cancelAnimationFrame(focusFrame);
       document.removeEventListener('mousedown', close);
     };
   }, [menu]);
@@ -85,6 +98,21 @@ function QuickAccessDrawer({ edgeVisible }) {
     return desktop()?.quickAccess?.setOpen?.(open, reduceMotion);
   }, []);
 
+  const closeEditor = useCallback(async () => {
+    setEditingItem(null);
+    await desktop()?.quickAccess?.setEditing?.(false);
+    await afterLayout();
+    lastSizeRef.current = '';
+    await measureAndConfigure();
+  }, [measureAndConfigure]);
+
+  const openEditor = useCallback(async (item) => {
+    window.clearTimeout(closeTimerRef.current);
+    setMenu(null);
+    await desktop()?.quickAccess?.setEditing?.(true);
+    setEditingItem(item);
+  }, []);
+
   const requestOpen = useCallback(async () => {
     if (openingRef.current) return;
     openingRef.current = true;
@@ -97,6 +125,12 @@ function QuickAccessDrawer({ edgeVisible }) {
       openingRef.current = false;
     }
   }, [measureAndConfigure, moveDrawer, refreshItems]);
+
+  useEffect(() => {
+    if (!editingItem || !loaded) return;
+    if (items.some((item) => item.id === editingItem.id)) return;
+    closeEditor();
+  }, [closeEditor, editingItem, items, loaded]);
 
   useEffect(() => {
     document.body.classList.add('quick-access-surface');
@@ -121,10 +155,24 @@ function QuickAccessDrawer({ edgeVisible }) {
   }, [items, loaded, measureAndConfigure]);
 
   const closeSoon = useCallback(() => {
-    if (menu) return;
+    if (menu || editingItem) return;
     window.clearTimeout(closeTimerRef.current);
     closeTimerRef.current = window.setTimeout(() => moveDrawer(false), 80);
-  }, [menu, moveDrawer]);
+  }, [editingItem, menu, moveDrawer]);
+
+  const handleMenuKeyDown = (event) => {
+    const buttons = [...(menuRef.current?.querySelectorAll('button') || [])];
+    if (!buttons.length) return;
+    const current = buttons.indexOf(document.activeElement);
+    let next = current;
+    if (event.key === 'ArrowDown') next = (current + 1) % buttons.length;
+    else if (event.key === 'ArrowUp') next = (current - 1 + buttons.length) % buttons.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = buttons.length - 1;
+    else return;
+    event.preventDefault();
+    buttons[next]?.focus();
+  };
 
   const copyItem = async (item) => {
     const type = classifyPayload(item.content);
@@ -204,73 +252,83 @@ function QuickAccessDrawer({ edgeVisible }) {
   };
 
   return (
-    <aside
-      ref={panelRef}
-      className={`quick-drawer ${edgeVisible ? '' : 'quick-drawer--edge-hidden'}`.trim()}
-      aria-label={t('quickAccess.title')}
-      onPointerEnter={requestOpen}
-      onPointerLeave={closeSoon}
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape') return;
-        event.preventDefault();
-        if (menu) {
-          setMenu(null);
-          return;
-        }
-        moveDrawer(false);
-      }}
-    >
-      <div className="quick-drawer__items">
-        {loaded && rows.length === 0 && (
-          <p className="quick-drawer__empty">{t('quickAccess.empty')}</p>
-        )}
-        {rows.map((row) => (
-          <div
-            key={`${row.type}-${row.items.map((item) => item.id).join('-')}`}
-            className={`quick-drawer__row quick-drawer__row--${row.type}`}
-          >
-            {row.items.map(renderItem)}
-          </div>
-        ))}
-      </div>
-      <div className="quick-drawer__handle" aria-hidden="true"><span /></div>
-      <span className="sr-only" aria-live="polite">
-        {copiedId ? t('quickAccess.copied') : ''}
-      </span>
-
-      {menu && (
-        <div
-          ref={menuRef}
-          className="quick-drawer__menu"
-          style={{ left: menu.x, top: menu.y }}
-          role="menu"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={async () => {
-              const item = menu.item;
-              setMenu(null);
-              await desktop()?.ui?.editFavorite?.(item);
-            }}
-          >
-            {t('frequent.edit')}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="danger"
-            onClick={async () => {
-              const id = menu.item.id;
-              setMenu(null);
-              await deleteItem(id);
-            }}
-          >
-            {t('frequent.delete')}
-          </button>
+    <>
+      <aside
+        ref={panelRef}
+        className={`quick-drawer ${edgeVisible ? '' : 'quick-drawer--edge-hidden'}`.trim()}
+        aria-label={t('quickAccess.title')}
+        aria-hidden={editingItem ? true : undefined}
+        inert={editingItem ? true : undefined}
+        onPointerEnter={requestOpen}
+        onPointerLeave={closeSoon}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape') return;
+          event.preventDefault();
+          if (menu) {
+            setMenu(null);
+            return;
+          }
+          moveDrawer(false);
+        }}
+      >
+        <div className="quick-drawer__items">
+          {loaded && rows.length === 0 && (
+            <p className="quick-drawer__empty">{t('quickAccess.empty')}</p>
+          )}
+          {rows.map((row) => (
+            <div
+              key={`${row.type}-${row.items.map((item) => item.id).join('-')}`}
+              className={`quick-drawer__row quick-drawer__row--${row.type}`}
+            >
+              {row.items.map(renderItem)}
+            </div>
+          ))}
         </div>
+        <div className="quick-drawer__handle" aria-hidden="true"><span /></div>
+        <span className="sr-only" aria-live="polite">
+          {copiedId ? t('quickAccess.copied') : ''}
+        </span>
+
+        {menu && (
+          <div
+            ref={menuRef}
+            className="quick-drawer__menu"
+            style={{ left: menu.x, top: menu.y }}
+            role="menu"
+            aria-label={t('quickAccess.actions')}
+            onKeyDown={handleMenuKeyDown}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => openEditor(menu.item)}
+            >
+              {t('frequent.edit')}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="danger"
+              onClick={async () => {
+                const id = menu.item.id;
+                setMenu(null);
+                await deleteItem(id);
+              }}
+            >
+              {t('frequent.delete')}
+            </button>
+          </div>
+        )}
+      </aside>
+
+      {editingItem && (
+        <FrequentEditModal
+          item={editingItem}
+          onSave={updateItem}
+          onClose={closeEditor}
+        />
       )}
-    </aside>
+    </>
   );
 }
 

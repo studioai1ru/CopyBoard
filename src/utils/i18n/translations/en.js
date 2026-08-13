@@ -66,6 +66,7 @@ export const en = {
 
   quickAccess: {
     title: 'Templates',
+    actions: 'Template actions',
     hint: 'Choose a value to copy it and add it to history.',
     empty: 'Favorites will appear here',
     copy: 'Copy “{{label}}”',

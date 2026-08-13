@@ -41,10 +41,9 @@ const MAX_IMAGE_CHARS: usize = 40_000_000;
 const QUICK_ACCESS_LABEL: &str = "quick-access";
 const QUICK_ACCESS_DEFAULT_WIDTH: u64 = 278;
 const QUICK_ACCESS_DEFAULT_HEIGHT: u64 = 64;
-const QUICK_ACCESS_HOT_ZONE_HEIGHT: f64 = 20.0;
-const QUICK_ACCESS_VISIBLE_EDGE_HEIGHT: f64 = 8.0;
-const QUICK_ACCESS_INVISIBLE_EDGE_HEIGHT: f64 = 8.0;
-const QUICK_ACCESS_POLL_MS: u64 = 80;
+const QUICK_ACCESS_HIT_AREA_HEIGHT: f64 = 20.0;
+const QUICK_ACCESS_EDITOR_WIDTH: f64 = 360.0;
+const QUICK_ACCESS_EDITOR_HEIGHT: f64 = 420.0;
 
 struct ClipboardRuntime {
     last_capture_key: Arc<Mutex<String>>,
@@ -64,15 +63,16 @@ struct RuntimeState {
     data_dir: PathBuf,
     settings: Mutex<Value>,
     history_io: Mutex<()>,
+    favorites_io: Mutex<()>,
     clipboard: ClipboardRuntime,
     quitting: AtomicBool,
     initial_hidden: AtomicBool,
     quick_access_animation: Arc<AtomicU64>,
-    quick_access_watcher_generation: AtomicU64,
     quick_access_width: AtomicU64,
     quick_access_height: AtomicU64,
     quick_access_open: AtomicBool,
     quick_access_ready: AtomicBool,
+    quick_access_editing: AtomicBool,
     quick_access_enabled: AtomicBool,
     quick_access_edge_visible: AtomicBool,
 }
@@ -1013,7 +1013,7 @@ fn window_hide(window: WebviewWindow) -> Result<(), String> {
 fn quick_access_geometry(
     window: &WebviewWindow,
     state: &RuntimeState,
-) -> Result<(i32, i32, i32, u32, u32, i32, i32, u32), String> {
+) -> Result<(i32, i32, i32, u32, u32), String> {
     let monitor = match window
         .primary_monitor()
         .map_err(|error| error.to_string())?
@@ -1029,38 +1029,20 @@ fn quick_access_geometry(
     let logical_height = state.quick_access_height.load(Ordering::SeqCst) as f64;
     let width = (logical_width * scale).round().max(1.0) as u32;
     let height = (logical_height * scale).round().max(1.0) as u32;
-    let edge_visible = state.quick_access_edge_visible.load(Ordering::SeqCst);
-    let edge_height = if edge_visible {
-        (QUICK_ACCESS_VISIBLE_EDGE_HEIGHT * scale).round().max(1.0) as i32
-    } else {
-        // Keep an invisible on-screen strip so the closed drawer stays hoverable.
-        (QUICK_ACCESS_INVISIBLE_EDGE_HEIGHT * scale).round().max(1.0) as i32
-    };
-    let trigger_height = if edge_visible {
-        edge_height
-    } else {
-        (QUICK_ACCESS_HOT_ZONE_HEIGHT * scale).round().max(1.0) as i32
-    };
+    let edge_height = (QUICK_ACCESS_HIT_AREA_HEIGHT * scale)
+        .round()
+        .max(1.0) as i32;
     let position = monitor.position();
     let size = monitor.size();
     let x = position.x + ((size.width as i64 - width as i64) / 2) as i32;
     let open_y = position.y;
     let closed_y = open_y - height as i32 + edge_height;
-    Ok((
-        x,
-        open_y,
-        closed_y,
-        width,
-        height,
-        trigger_height,
-        position.x,
-        size.width,
-    ))
+    Ok((x, open_y, closed_y, width, height))
 }
 
 fn set_quick_access_size(state: &RuntimeState, width: f64, height: f64) {
     state.quick_access_width.store(
-        width.round().clamp(52.0, 278.0) as u64,
+        width.round().clamp(52.0, QUICK_ACCESS_EDITOR_WIDTH) as u64,
         Ordering::SeqCst,
     );
     state.quick_access_height.store(
@@ -1086,20 +1068,14 @@ fn position_quick_access(
         .map_err(|error| error.to_string())
 }
 
-fn stop_quick_access_watcher(state: &RuntimeState) {
-    state
-        .quick_access_watcher_generation
-        .fetch_add(1, Ordering::SeqCst);
-}
-
 fn apply_quick_access_state(app: &AppHandle, state: &RuntimeState) {
     let Some(window) = app.get_webview_window(QUICK_ACCESS_LABEL) else {
         return;
     };
     let enabled = state.quick_access_enabled.load(Ordering::SeqCst);
     if !enabled {
-        stop_quick_access_watcher(state);
         state.quick_access_open.store(false, Ordering::SeqCst);
+        state.quick_access_editing.store(false, Ordering::SeqCst);
         state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
         let _ = window.hide();
         return;
@@ -1111,77 +1087,11 @@ fn apply_quick_access_state(app: &AppHandle, state: &RuntimeState) {
 
     state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
     let open = state.quick_access_open.load(Ordering::SeqCst);
+    let editing = state.quick_access_editing.load(Ordering::SeqCst);
     let _ = position_quick_access(&window, state, open);
-    let _ = window.set_focusable(false);
+    let _ = window.set_focusable(editing);
     let _ = window.set_always_on_top(true);
     let _ = window.show();
-
-    if state.quick_access_edge_visible.load(Ordering::SeqCst) {
-        stop_quick_access_watcher(state);
-    } else {
-        start_quick_access_watcher(app.clone());
-    }
-}
-
-fn start_quick_access_watcher(app: AppHandle) {
-    let token = {
-        let state = app.state::<RuntimeState>();
-        if !state.quick_access_enabled.load(Ordering::SeqCst)
-            || state.quick_access_edge_visible.load(Ordering::SeqCst)
-        {
-            return;
-        }
-        state
-            .quick_access_watcher_generation
-            .fetch_add(1, Ordering::SeqCst)
-            + 1
-    };
-
-    thread::spawn(move || {
-        let mut cursor_was_in_zone = false;
-
-        loop {
-            let Some(window) = app.get_webview_window(QUICK_ACCESS_LABEL) else {
-                return;
-            };
-            let state = app.state::<RuntimeState>();
-            if state
-                .quick_access_watcher_generation
-                .load(Ordering::SeqCst)
-                != token
-                || !state.quick_access_enabled.load(Ordering::SeqCst)
-                || state.quick_access_edge_visible.load(Ordering::SeqCst)
-            {
-                return;
-            }
-
-            if !state.quick_access_ready.load(Ordering::SeqCst)
-                || state.quick_access_open.load(Ordering::SeqCst)
-            {
-                cursor_was_in_zone = false;
-                thread::sleep(Duration::from_millis(QUICK_ACCESS_POLL_MS));
-                continue;
-            }
-
-            let cursor_in_zone = quick_access_geometry(&window, &state)
-                .ok()
-                .and_then(|(_, open_y, _, _, _, hot_zone_height, zone_x, zone_width)| {
-                    app.cursor_position().ok().map(|cursor| {
-                        cursor.x >= zone_x as f64
-                            && cursor.x <= (zone_x + zone_width as i32) as f64
-                            && cursor.y >= open_y as f64
-                            && cursor.y <= (open_y + hot_zone_height) as f64
-                    })
-                })
-                .unwrap_or(false);
-
-            if cursor_in_zone && !cursor_was_in_zone {
-                let _ = window.emit("copyboard:quickAccess.openRequested", ());
-            }
-            cursor_was_in_zone = cursor_in_zone;
-            thread::sleep(Duration::from_millis(QUICK_ACCESS_POLL_MS));
-        }
-    });
 }
 
 #[tauri::command]
@@ -1230,6 +1140,9 @@ fn quick_access_set_edge_visible(
     state
         .quick_access_edge_visible
         .store(visible, Ordering::SeqCst);
+    if !visible && !state.quick_access_editing.load(Ordering::SeqCst) {
+        state.quick_access_open.store(false, Ordering::SeqCst);
+    }
     apply_quick_access_state(&app, &state);
     let _ = app.emit("copyboard:quickAccess.edgeVisible", visible);
     Ok(true)
@@ -1248,20 +1161,38 @@ fn quick_access_set_enabled(
 }
 
 #[tauri::command]
-fn ui_edit_favorite(
+fn quick_access_set_editing(
     app: AppHandle,
     state: State<'_, RuntimeState>,
-    item: Value,
+    editing: bool,
 ) -> Result<bool, String> {
-    if state.quick_access_ready.load(Ordering::SeqCst) {
-        if let Some(window) = app.get_webview_window(QUICK_ACCESS_LABEL) {
-            state.quick_access_open.store(false, Ordering::SeqCst);
-            state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
-            let _ = position_quick_access(&window, &state, false);
-        }
+    if !state.quick_access_enabled.load(Ordering::SeqCst) {
+        return Ok(false);
     }
-    reveal_window(&app, false);
-    let _ = app.emit("copyboard:ui.editFavorite", item);
+    let window = app
+        .get_webview_window(QUICK_ACCESS_LABEL)
+        .ok_or_else(|| "Quick access window is unavailable".to_string())?;
+
+    state.quick_access_editing.store(editing, Ordering::SeqCst);
+    state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
+    if editing {
+        set_quick_access_size(
+            &state,
+            QUICK_ACCESS_EDITOR_WIDTH,
+            QUICK_ACCESS_EDITOR_HEIGHT,
+        );
+        state.quick_access_open.store(true, Ordering::SeqCst);
+        position_quick_access(&window, &state, true)?;
+        window
+            .set_focusable(true)
+            .map_err(|error| error.to_string())?;
+        let _ = window.show();
+        let _ = window.set_focus();
+    } else {
+        window
+            .set_focusable(false)
+            .map_err(|error| error.to_string())?;
+    }
     Ok(true)
 }
 
@@ -1273,6 +1204,9 @@ fn quick_access_set_open(
     reduce_motion: Option<bool>,
 ) -> Result<bool, String> {
     if !state.quick_access_enabled.load(Ordering::SeqCst) {
+        return Ok(true);
+    }
+    if !open && state.quick_access_editing.load(Ordering::SeqCst) {
         return Ok(true);
     }
     let window = app
@@ -1583,6 +1517,7 @@ fn history_migrate(
 
 #[tauri::command]
 fn favorites_load(state: State<'_, RuntimeState>) -> Vec<Value> {
+    let _guard = state.favorites_io.lock().ok();
     load_json(&favorites_path(&state), json!([]))
         .as_array()
         .cloned()
@@ -1595,6 +1530,52 @@ fn favorites_save(
     state: State<'_, RuntimeState>,
     items: Vec<Value>,
 ) -> Result<Vec<Value>, String> {
+    let _guard = state.favorites_io.lock().map_err(|error| error.to_string())?;
+    save_json(&favorites_path(&state), &Value::Array(items.clone()))?;
+    rebuild_tray(&app)?;
+    let _ = app.emit("copyboard:favorites.changed", items.clone());
+    Ok(items)
+}
+
+#[tauri::command]
+fn favorites_update(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    item: Value,
+) -> Result<Vec<Value>, String> {
+    let id = item
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())
+        .ok_or_else(|| "Favorite id is required".to_string())?;
+    let _guard = state.favorites_io.lock().map_err(|error| error.to_string())?;
+    let mut items = load_json(&favorites_path(&state), json!([]))
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let position = items
+        .iter()
+        .position(|row| row.get("id").and_then(Value::as_str) == Some(id))
+        .ok_or_else(|| "Favorite was not found".to_string())?;
+    items[position] = item;
+    save_json(&favorites_path(&state), &Value::Array(items.clone()))?;
+    rebuild_tray(&app)?;
+    let _ = app.emit("copyboard:favorites.changed", items.clone());
+    Ok(items)
+}
+
+#[tauri::command]
+fn favorites_delete(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    id: String,
+) -> Result<Vec<Value>, String> {
+    let _guard = state.favorites_io.lock().map_err(|error| error.to_string())?;
+    let mut items = load_json(&favorites_path(&state), json!([]))
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    items.retain(|row| row.get("id").and_then(Value::as_str) != Some(id.as_str()));
     save_json(&favorites_path(&state), &Value::Array(items.clone()))?;
     rebuild_tray(&app)?;
     let _ = app.emit("copyboard:favorites.changed", items.clone());
@@ -1627,15 +1608,16 @@ pub fn run() {
                 data_dir,
                 settings: Mutex::new(settings.clone()),
                 history_io: Mutex::new(()),
+                favorites_io: Mutex::new(()),
                 clipboard: ClipboardRuntime::default(),
                 quitting: AtomicBool::new(false),
                 initial_hidden: AtomicBool::new(launch_hidden),
                 quick_access_animation: Arc::new(AtomicU64::new(0)),
-                quick_access_watcher_generation: AtomicU64::new(0),
                 quick_access_width: AtomicU64::new(QUICK_ACCESS_DEFAULT_WIDTH),
                 quick_access_height: AtomicU64::new(QUICK_ACCESS_DEFAULT_HEIGHT),
                 quick_access_open: AtomicBool::new(false),
                 quick_access_ready: AtomicBool::new(false),
+                quick_access_editing: AtomicBool::new(false),
                 quick_access_enabled: AtomicBool::new(setting_bool(
                     &settings,
                     "quickAccessEnabled",
@@ -1651,7 +1633,6 @@ pub fn run() {
             let runtime = app.state::<RuntimeState>();
             start_clipboard_watcher(app.handle().clone(), &runtime.clipboard)
                 .map_err(std::io::Error::other)?;
-            start_quick_access_watcher(app.handle().clone());
             if !cfg!(debug_assertions) {
                 let _ = sync_autostart(app.handle(), auto_start);
             }
@@ -1671,8 +1652,8 @@ pub fn run() {
             quick_access_configure,
             quick_access_set_edge_visible,
             quick_access_set_enabled,
+            quick_access_set_editing,
             quick_access_set_open,
-            ui_edit_favorite,
             clip_read_text,
             clip_read_image,
             clip_write_text,
@@ -1696,7 +1677,9 @@ pub fn run() {
             history_clear,
             history_migrate,
             favorites_load,
-            favorites_save
+            favorites_save,
+            favorites_update,
+            favorites_delete
         ])
         .on_window_event(|window, event| {
             if window.label() == QUICK_ACCESS_LABEL {

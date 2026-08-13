@@ -75,6 +75,8 @@ const api = {
   favorites: {
     load: () => invoke('favorites_load'),
     save: (items) => invoke('favorites_save', { items }),
+    update: (item) => invoke('favorites_update', { item }),
+    delete: (id) => invoke('favorites_delete', { id }),
     onChanged: (callback) => subscribe('copyboard:favorites.changed', callback),
   },
   quickAccess: {
@@ -82,6 +84,7 @@ const api = {
     configure: (size) => invoke('quick_access_configure', size),
     setEnabled: (enabled) => invoke('quick_access_set_enabled', { enabled }),
     setEdgeVisible: (visible) => invoke('quick_access_set_edge_visible', { visible }),
+    setEditing: (editing) => invoke('quick_access_set_editing', { editing }),
     setOpen: (open, reduceMotion = false) => (
       invoke('quick_access_set_open', { open, reduceMotion })
     ),
@@ -95,8 +98,6 @@ const api = {
   ui: {
     onFocusSearch: (callback) => subscribe('copyboard:ui.focusSearch', callback),
     onOpenSettings: (callback) => subscribe('copyboard:ui.openSettings', callback),
-    onEditFavorite: (callback) => subscribe('copyboard:ui.editFavorite', callback),
-    editFavorite: (item) => invoke('ui_edit_favorite', { item }),
   },
   platform: navigator.platform,
 };

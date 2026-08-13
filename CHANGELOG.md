@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- Editing a favorite from the drawer now opens the edit form inside the drawer instead of revealing the main window.
+- Favorite edits and deletions from either window now update the shared saved list and synchronize immediately everywhere.
+- Turning off the drawer edge now closes the drawer and hides its handle while preserving a centered 20-pixel transparent mouse target without background polling.
+- The drawer handle no longer draws a rectangular background outside the rounded panel.
+
 ## [1.0.12] - 2026-08-13
 
 ### Added

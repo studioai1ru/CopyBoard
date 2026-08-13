@@ -91,25 +91,34 @@ export function useFrequentItems() {
   const updateItem = useCallback(async (id, label, content, icon, displayMode = 'icon-text') => {
     const trimmed = String(content || '').trim();
     if (!trimmed) return false;
-    await persist(
-      items.map((row) =>
-        row.id === id
-          ? {
-              ...row,
-              label: favoriteLabel(label, trimmed),
-              content: trimmed,
-              icon: normalizeFavoriteIcon(icon, trimmed),
-              displayMode: normalizeFavoriteDisplayMode(displayMode),
-              updatedAt: new Date().toISOString(),
-            }
-          : row,
-      ),
-    );
+    const current = items.find((row) => row.id === id);
+    if (!current) return false;
+    const updated = {
+      ...current,
+      label: favoriteLabel(label, trimmed),
+      content: trimmed,
+      icon: normalizeFavoriteIcon(icon, trimmed),
+      displayMode: normalizeFavoriteDisplayMode(displayMode),
+      updatedAt: new Date().toISOString(),
+    };
+    const api = desktop();
+    if (api?.favorites?.update) {
+      const saved = await api.favorites.update(updated);
+      setItems(Array.isArray(saved) ? saved : []);
+    } else {
+      await persist(items.map((row) => (row.id === id ? updated : row)));
+    }
     return true;
   }, [items, persist]);
 
   const deleteItem = useCallback(async (id) => {
-    await persist(items.filter((row) => row.id !== id));
+    const api = desktop();
+    if (api?.favorites?.delete) {
+      const saved = await api.favorites.delete(id);
+      setItems(Array.isArray(saved) ? saved : []);
+    } else {
+      await persist(items.filter((row) => row.id !== id));
+    }
   }, [items, persist]);
 
   const reorderItem = useCallback(async (activeId, targetId = null) => {

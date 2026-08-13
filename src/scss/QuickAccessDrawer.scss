@@ -9,6 +9,28 @@
   background: transparent;
 }
 
+.quick-access-surface .frequent-modal-overlay {
+  inset: 0;
+  align-items: stretch;
+  padding: 8px;
+  background: transparent;
+}
+
+.quick-access-surface .frequent-modal {
+  width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-lg);
+}
+
+.quick-access-surface .frequent-modal__form {
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+}
+
+.quick-access-surface .frequent-modal__body {
+  gap: var(--spacing-sm);
+}
+
 .quick-drawer {
   position: relative;
   display: grid;
@@ -16,27 +38,13 @@
   min-inline-size: 52px;
   max-inline-size: 278px;
   max-block-size: 420px;
-  grid-template-rows: minmax(0, auto) 8px;
+  grid-template-rows: minmax(0, auto) 20px;
   overflow: hidden;
-  border: 1px solid var(--border-secondary);
-  border-block-start: 0;
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  background: var(--bg-secondary);
+  border: 0;
+  background: transparent;
   color: var(--text-primary);
   overscroll-behavior: contain;
   contain: layout style paint;
-}
-
-.quick-drawer--edge-hidden {
-  border-color: transparent;
-  background: transparent;
-}
-
-.quick-drawer--edge-hidden .quick-drawer__items {
-  border: 1px solid var(--border-secondary);
-  border-block-start: 0;
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  background: var(--bg-secondary);
 }
 
 .quick-drawer__items {
@@ -49,7 +57,11 @@
   gap: 4px;
   overflow-x: hidden;
   overflow-y: auto;
+  border: 1px solid var(--border-secondary);
+  border-block-start: 0;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   padding: 6px 4px 4px;
+  background: var(--bg-secondary);
 }
 
 .quick-drawer__row {
@@ -169,10 +181,9 @@
 .quick-drawer__handle {
   display: grid;
   min-inline-size: 100%;
-  block-size: 8px;
+  block-size: 20px;
   place-items: center;
-  border-block-start: 1px solid var(--border-primary);
-  background: var(--bg-tertiary);
+  background: transparent;
 }
 
 .quick-drawer__handle span {
@@ -184,7 +195,6 @@
 }
 
 .quick-drawer--edge-hidden .quick-drawer__handle {
-  border-block-start-color: transparent;
   background: transparent;
 }
 
