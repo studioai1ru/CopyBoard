@@ -11,23 +11,24 @@ export function useFrequentItems() {
   const [items, setItems] = useState([]);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const api = desktop();
-        const data = api?.favorites?.load ? await api.favorites.load() : [];
-        if (alive) setItems(Array.isArray(data) ? data : []);
-      } catch {
-        if (alive) setItems([]);
-      } finally {
-        if (alive) setLoaded(true);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+  const refreshItems = useCallback(async () => {
+    try {
+      const api = desktop();
+      const data = api?.favorites?.load ? await api.favorites.load() : [];
+      const nextItems = Array.isArray(data) ? data : [];
+      setItems(nextItems);
+      return nextItems;
+    } catch {
+      setItems([]);
+      return [];
+    } finally {
+      setLoaded(true);
+    }
   }, []);
+
+  useEffect(() => {
+    refreshItems();
+  }, [refreshItems]);
 
   useEffect(() => {
     const api = desktop();
@@ -135,6 +136,7 @@ export function useFrequentItems() {
   return {
     items,
     loaded,
+    refreshItems,
     addItem,
     addFromClipboardItem,
     toggleFromClipboardItem,

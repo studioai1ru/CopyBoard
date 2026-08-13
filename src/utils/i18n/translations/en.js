@@ -142,6 +142,7 @@ export const en = {
 
     language: {
       interfaceLanguage: 'Interface language',
+      showQuickAccessEdge: 'Show drawer edge',
     },
 
     storage: {

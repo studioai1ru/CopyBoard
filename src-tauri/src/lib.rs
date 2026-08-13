@@ -37,8 +37,11 @@ const MAX_IMAGE_CHARS: usize = 40_000_000;
 const POLL_MS: u64 = 420;
 const DEFAULT_SUPPRESS_MS: i64 = 4_000;
 const QUICK_ACCESS_LABEL: &str = "quick-access";
-const QUICK_ACCESS_HEIGHT: f64 = 280.0;
-const QUICK_ACCESS_HOT_ZONE: f64 = 8.0;
+const QUICK_ACCESS_DEFAULT_WIDTH: u64 = 266;
+const QUICK_ACCESS_DEFAULT_HEIGHT: u64 = 64;
+const QUICK_ACCESS_HOT_ZONE_HEIGHT: f64 = 3.0;
+const QUICK_ACCESS_VISIBLE_EDGE_HEIGHT: f64 = 6.0;
+const QUICK_ACCESS_POLL_MS: u64 = 80;
 
 struct ClipboardRuntime {
     running: Arc<AtomicBool>,
@@ -67,6 +70,11 @@ struct RuntimeState {
     quitting: AtomicBool,
     initial_hidden: AtomicBool,
     quick_access_animation: Arc<AtomicU64>,
+    quick_access_width: AtomicU64,
+    quick_access_height: AtomicU64,
+    quick_access_open: AtomicBool,
+    quick_access_ready: AtomicBool,
+    quick_access_edge_visible: AtomicBool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,6 +115,7 @@ fn defaults() -> Value {
         "closeBehavior": "minimize",
         "autoStart": false,
         "showTrayNotifications": true,
+        "showQuickAccessEdge": true,
         "quickAccessHotkey": "Ctrl+Shift+V",
         "clearAllHotkey": "Ctrl+Shift+Delete",
         "viewMode": "list",
@@ -834,46 +843,168 @@ fn window_hide(window: WebviewWindow) -> Result<(), String> {
     window.hide().map_err(|error| error.to_string())
 }
 
-fn quick_access_geometry(window: &WebviewWindow) -> Result<(i32, i32, i32, u32, u32), String> {
+fn quick_access_geometry(
+    window: &WebviewWindow,
+    state: &RuntimeState,
+) -> Result<(i32, i32, i32, u32, u32, i32), String> {
     let monitor = match window
-        .current_monitor()
+        .primary_monitor()
         .map_err(|error| error.to_string())?
     {
         Some(monitor) => monitor,
         None => window
-            .primary_monitor()
+            .current_monitor()
             .map_err(|error| error.to_string())?
             .ok_or_else(|| "Primary monitor is unavailable".to_string())?,
     };
     let scale = monitor.scale_factor();
-    let height = (QUICK_ACCESS_HEIGHT * scale).round().max(1.0) as u32;
-    let hot_zone = (QUICK_ACCESS_HOT_ZONE * scale).round().max(1.0) as i32;
+    let logical_width = state.quick_access_width.load(Ordering::SeqCst) as f64;
+    let logical_height = state.quick_access_height.load(Ordering::SeqCst) as f64;
+    let width = (logical_width * scale).round().max(1.0) as u32;
+    let height = (logical_height * scale).round().max(1.0) as u32;
+    let edge_visible = state.quick_access_edge_visible.load(Ordering::SeqCst);
+    let edge_height = if edge_visible {
+        (QUICK_ACCESS_VISIBLE_EDGE_HEIGHT * scale).round().max(1.0) as i32
+    } else {
+        0
+    };
+    let trigger_height = if edge_visible {
+        edge_height
+    } else {
+        (QUICK_ACCESS_HOT_ZONE_HEIGHT * scale).round().max(1.0) as i32
+    };
     let position = monitor.position();
     let size = monitor.size();
+    let x = position.x + ((size.width as i64 - width as i64) / 2) as i32;
     let open_y = position.y;
-    let closed_y = open_y - height as i32 + hot_zone;
-    Ok((position.x, open_y, closed_y, size.width, height))
+    let closed_y = open_y - height as i32 + edge_height;
+    Ok((x, open_y, closed_y, width, height, trigger_height))
+}
+
+fn set_quick_access_size(state: &RuntimeState, width: f64, height: f64) {
+    state.quick_access_width.store(
+        width.round().clamp(52.0, 266.0) as u64,
+        Ordering::SeqCst,
+    );
+    state.quick_access_height.store(
+        height.round().clamp(44.0, 420.0) as u64,
+        Ordering::SeqCst,
+    );
+}
+
+fn position_quick_access(
+    window: &WebviewWindow,
+    state: &RuntimeState,
+    open: bool,
+) -> Result<(), String> {
+    let (x, open_y, closed_y, width, height, _) = quick_access_geometry(window, state)?;
+    window
+        .set_size(Size::Physical(PhysicalSize::new(width, height)))
+        .map_err(|error| error.to_string())?;
+    window
+        .set_position(Position::Physical(PhysicalPosition::new(
+            x,
+            if open { open_y } else { closed_y },
+        )))
+        .map_err(|error| error.to_string())
+}
+
+fn start_quick_access_watcher(app: AppHandle) {
+    thread::spawn(move || {
+        let mut cursor_was_in_zone = false;
+
+        loop {
+            let Some(window) = app.get_webview_window(QUICK_ACCESS_LABEL) else {
+                return;
+            };
+            let state = app.state::<RuntimeState>();
+
+            if !state.quick_access_ready.load(Ordering::SeqCst)
+                || state.quick_access_open.load(Ordering::SeqCst)
+            {
+                cursor_was_in_zone = false;
+                thread::sleep(Duration::from_millis(QUICK_ACCESS_POLL_MS));
+                continue;
+            }
+
+            let cursor_in_zone = quick_access_geometry(&window, &state)
+                .ok()
+                .and_then(|(x, open_y, _, width, _, hot_zone_height)| {
+                    app.cursor_position().ok().map(|cursor| {
+                        cursor.x >= x as f64
+                            && cursor.x <= (x + width as i32) as f64
+                            && cursor.y >= open_y as f64
+                            && cursor.y <= (open_y + hot_zone_height) as f64
+                    })
+                })
+                .unwrap_or(false);
+
+            if cursor_in_zone && !cursor_was_in_zone {
+                let _ = window.emit("copyboard:quickAccess.openRequested", ());
+            }
+            cursor_was_in_zone = cursor_in_zone;
+            thread::sleep(Duration::from_millis(QUICK_ACCESS_POLL_MS));
+        }
+    });
 }
 
 #[tauri::command]
 fn quick_access_ready(
     app: AppHandle,
     state: State<'_, RuntimeState>,
+    width: f64,
+    height: f64,
 ) -> Result<bool, String> {
     let window = app
         .get_webview_window(QUICK_ACCESS_LABEL)
         .ok_or_else(|| "Quick access window is unavailable".to_string())?;
     state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
-    let (x, _open_y, closed_y, width, height) = quick_access_geometry(&window)?;
-    window
-        .set_size(Size::Physical(PhysicalSize::new(width, height)))
-        .map_err(|error| error.to_string())?;
-    window
-        .set_position(Position::Physical(PhysicalPosition::new(x, closed_y)))
-        .map_err(|error| error.to_string())?;
+    set_quick_access_size(&state, width, height);
+    state.quick_access_open.store(false, Ordering::SeqCst);
+    position_quick_access(&window, &state, false)?;
     let _ = window.set_focusable(false);
     let _ = window.set_always_on_top(true);
     window.show().map_err(|error| error.to_string())?;
+    state.quick_access_ready.store(true, Ordering::SeqCst);
+    Ok(true)
+}
+
+#[tauri::command]
+fn quick_access_configure(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    width: f64,
+    height: f64,
+) -> Result<bool, String> {
+    let window = app
+        .get_webview_window(QUICK_ACCESS_LABEL)
+        .ok_or_else(|| "Quick access window is unavailable".to_string())?;
+    state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
+    set_quick_access_size(&state, width, height);
+    let open = state.quick_access_open.load(Ordering::SeqCst);
+    position_quick_access(&window, &state, open)?;
+    Ok(true)
+}
+
+#[tauri::command]
+fn quick_access_set_edge_visible(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    visible: bool,
+) -> Result<bool, String> {
+    save_setting(&state, "showQuickAccessEdge", Value::Bool(visible))?;
+    state
+        .quick_access_edge_visible
+        .store(visible, Ordering::SeqCst);
+
+    if state.quick_access_ready.load(Ordering::SeqCst) {
+        if let Some(window) = app.get_webview_window(QUICK_ACCESS_LABEL) {
+            state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
+            let open = state.quick_access_open.load(Ordering::SeqCst);
+            position_quick_access(&window, &state, open)?;
+        }
+    }
+
     Ok(true)
 }
 
@@ -887,7 +1018,8 @@ fn quick_access_set_open(
     let window = app
         .get_webview_window(QUICK_ACCESS_LABEL)
         .ok_or_else(|| "Quick access window is unavailable".to_string())?;
-    let (x, open_y, closed_y, width, height) = quick_access_geometry(&window)?;
+    state.quick_access_open.store(open, Ordering::SeqCst);
+    let (x, open_y, closed_y, width, height, _) = quick_access_geometry(&window, &state)?;
     window
         .set_size(Size::Physical(PhysicalSize::new(width, height)))
         .map_err(|error| error.to_string())?;
@@ -1206,7 +1338,9 @@ fn favorites_save(
 ) -> Result<Vec<Value>, String> {
     save_json(&favorites_path(&state), &Value::Array(items.clone()))?;
     rebuild_tray(&app)?;
-    let _ = app.emit("copyboard:favorites.changed", items.clone());
+    if let Some(window) = app.get_webview_window(QUICK_ACCESS_LABEL) {
+        let _ = window.emit("copyboard:favorites.changed", items.clone());
+    }
     Ok(items)
 }
 
@@ -1239,8 +1373,18 @@ pub fn run() {
                 quitting: AtomicBool::new(false),
                 initial_hidden: AtomicBool::new(launch_hidden),
                 quick_access_animation: Arc::new(AtomicU64::new(0)),
+                quick_access_width: AtomicU64::new(QUICK_ACCESS_DEFAULT_WIDTH),
+                quick_access_height: AtomicU64::new(QUICK_ACCESS_DEFAULT_HEIGHT),
+                quick_access_open: AtomicBool::new(false),
+                quick_access_ready: AtomicBool::new(false),
+                quick_access_edge_visible: AtomicBool::new(setting_bool(
+                    &settings,
+                    "showQuickAccessEdge",
+                    true,
+                )),
             };
             app.manage(state);
+            start_quick_access_watcher(app.handle().clone());
             if !cfg!(debug_assertions) {
                 let _ = sync_autostart(app.handle(), auto_start);
             }
@@ -1257,6 +1401,8 @@ pub fn run() {
             window_show,
             window_hide,
             quick_access_ready,
+            quick_access_configure,
+            quick_access_set_edge_visible,
             quick_access_set_open,
             clip_start,
             clip_stop,

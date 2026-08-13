@@ -215,6 +215,13 @@ const SettingsModal = ({
                 <option key={entry.code} value={entry.code}>{entry.shortLabel} — {entry.name}</option>
               ))}
             </SelectField>
+            <div className="preference-card__toggles">
+              <Toggle
+                checked={current.showQuickAccessEdge}
+                onChange={change.showQuickAccessEdge}
+                label={t('settings.language.showQuickAccessEdge')}
+              />
+            </div>
           </section>
 
           <section className="preference-card">

@@ -74,9 +74,14 @@ const api = {
     onChanged: (callback) => subscribe('copyboard:favorites.changed', callback),
   },
   quickAccess: {
-    ready: () => invoke('quick_access_ready'),
+    ready: (size) => invoke('quick_access_ready', size),
+    configure: (size) => invoke('quick_access_configure', size),
+    setEdgeVisible: (visible) => invoke('quick_access_set_edge_visible', { visible }),
     setOpen: (open, reduceMotion = false) => (
       invoke('quick_access_set_open', { open, reduceMotion })
+    ),
+    onOpenRequested: (callback) => (
+      subscribe('copyboard:quickAccess.openRequested', callback)
     ),
   },
   ui: {

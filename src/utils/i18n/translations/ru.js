@@ -142,6 +142,7 @@ export const ru = {
 
     language: {
       interfaceLanguage: 'Язык интерфейса',
+      showQuickAccessEdge: 'Отображать край шторки',
     },
 
     storage: {

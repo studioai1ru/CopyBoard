@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Added a language-adjacent setting to show or fully hide the top-edge drawer tab, enabled by default.
+
+### Changed
+
+- The top-edge favorites drawer is now a compact centered panel with no visible closed edge, matching favorite chip sizing and stacking non-icon-only items one per row.
+
+### Fixed
+
+- The top-edge drawer now refreshes favorites immediately after additions or removals and again before every opening.
+- The Windows app icon no longer shows white background corners on the desktop or taskbar.
+
 ## [1.0.6] - 2026-08-13
 
 ### Added
