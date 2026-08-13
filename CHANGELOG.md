@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.19] - 2026-08-14
+
 ### Added
 
 - Custom favorite icons now offer 32 symbols in an 8×4 grid and a ninth rainbow swatch that opens a free color picker.
