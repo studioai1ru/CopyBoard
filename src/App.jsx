@@ -39,6 +39,10 @@ function App() {
     boot();
   }, []);
 
+  useEffect(() => {
+    desktop()?.window?.ready?.();
+  }, []);
+
   const handleThemeChange = useCallback(async (newTheme) => {
     if (newTheme === theme || isThemeChanging) return;
     if (!['dark', 'light'].includes(newTheme)) return;

@@ -4,75 +4,41 @@
   "version": "1.0.4",
   "description": "Personal clipboard manager for Windows and macOS",
   "type": "module",
-  "main": "src/electron/main.js",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
-    "dev": "node scripts/dev.mjs",
+    "dev": "tauri dev",
     "dev:react": "vite",
-    "electron": "npm run build && electron .",
     "build": "vite build",
-    "dist": "npm run build && electron-builder",
-    "dist:linux": "npm run build && electron-builder --linux",
-    "dist:win": "npm run build && electron-builder --win --x64 --publish never",
-    "dist:mac": "npm run build && electron-builder --mac --universal --publish never",
+    "dist": "tauri build",
+    "dist:linux": "tauri build --bundles appimage",
+    "dist:win": "node scripts/package-tauri.mjs win",
+    "dist:mac": "node scripts/package-tauri.mjs mac",
     "lint": "eslint .",
     "preview": "vite preview",
     "release:patch": "node scripts/release-patch.mjs",
+    "tauri": "tauri",
     "version": "node scripts/update-changelog.mjs && git add CHANGELOG.md"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-icons": "^5.5.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",
+    "@tauri-apps/cli": "^2.11.4",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.3",
-    "electron": "^37.2.4",
-    "electron-builder": "^25.1.8",
+    "@vitejs/plugin-react": "^5.2.0",
     "eslint": "^9.13.0",
     "eslint-plugin-react": "^7.37.2",
     "eslint-plugin-react-hooks": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.4.14",
     "globals": "^15.11.0",
     "sass-embedded": "^1.89.2",
-    "vite": "^5.4.10"
-  },
-  "build": {
-    "appId": "com.copyboard.app",
-    "productName": "CopyBoard",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist-react/**/*",
-      "src/electron/**/*",
-      "node_modules/**/*"
-    ],
-    "extraMetadata": {
-      "main": "src/electron/main.js"
-    },
-    "win": {
-      "target": "nsis",
-      "icon": "public/images/CopyBoard_Logo.png",
-      "artifactName": "${productName}-Windows-${arch}-Setup.${ext}"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
-    },
-    "mac": {
-      "target": "dmg",
-      "icon": "public/images/CopyBoard_Logo.png",
-      "category": "public.app-category.productivity",
-      "artifactName": "${productName}-macOS-${arch}.${ext}"
-    },
-    "linux": {
-      "target": "AppImage",
-      "icon": "public/images/CopyBoard_Logo.png"
-    }
+    "vite": "^7.3.6"
   }
 }

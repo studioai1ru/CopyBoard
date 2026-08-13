@@ -16,7 +16,14 @@ const rendererRules = {
 
 export default [
   {
-    ignores: ['dist/**', 'dist-react/**', 'release/**', 'node_modules/**'],
+    ignores: [
+      '.tmp/**',
+      'dist/**',
+      'dist-react/**',
+      'release/**',
+      'node_modules/**',
+      'src-tauri/target/**',
+    ],
   },
   {
     files: ['src/**/*.{js,jsx}'],
@@ -37,7 +44,7 @@ export default [
     rules: rendererRules,
   },
   {
-    files: ['src/electron/**/*.js', 'scripts/**/*.mjs', '*.config.js'],
+    files: ['scripts/**/*.mjs', '*.config.js'],
     languageOptions: {
       globals: globals.node,
     },

@@ -12,6 +12,7 @@ dist
 dist-react
 dist-ssr
 release
+src-tauri/target
 coverage
 *.local
 

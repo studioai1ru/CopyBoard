@@ -19,8 +19,8 @@ const TitleBar = () => {
   }, []);
 
   return (
-    <div className="window-chrome">
-      <div className="window-chrome__identity">
+    <div className="window-chrome" data-tauri-drag-region>
+      <div className="window-chrome__identity" data-tauri-drag-region>
         <img src="./images/CopyBoard_Logo.png" alt="" aria-hidden="true" />
         <span>{t('app.title')}</span>
       </div>

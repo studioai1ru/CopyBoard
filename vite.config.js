@@ -1,7 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// CopyBoard renderer build (Electron loads dist-react/index.html)
+const host = process.env.TAURI_DEV_HOST;
+
+// CopyBoard renderer build (Tauri loads dist-react/index.html).
 export default defineConfig({
   plugins: [react()],
   base: './',
@@ -9,12 +11,22 @@ export default defineConfig({
     outDir: 'dist-react',
     emptyOutDir: true,
     sourcemap: false,
-    target: 'chrome126',
+    target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'safari13',
   },
   server: {
-    host: '127.0.0.1',
+    host: host || '127.0.0.1',
     port: 3000,
     strictPort: true,
+    hmr: host
+      ? {
+          protocol: 'ws',
+          host,
+          port: 3001,
+        }
+      : undefined,
+    watch: {
+      ignored: ['**/src-tauri/**'],
+    },
   },
   css: {
     preprocessorOptions: {

@@ -1,6 +1,6 @@
 # CopyBoard
 
-CopyBoard is a local clipboard history and favorites app for Windows and macOS. It runs as an Electron desktop application and keeps copied text, code, and images available for reuse.
+CopyBoard is a local clipboard history and favorites app for Windows and macOS. It runs as a lightweight Tauri desktop application and keeps copied text, code, and images available for reuse.
 
 ## Download
 
@@ -28,14 +28,14 @@ CopyBoard stores its data on the local machine. The repository does not include 
 
 ## Technology
 
-- Electron for the desktop process, clipboard access, tray, and global shortcuts
+- Tauri and Rust for clipboard access, tray integration, global shortcuts, and native windows
 - React and Vite for the renderer
 - SCSS for component styling
-- electron-builder for Windows and macOS packaging
+- Tauri Bundler for Windows and macOS packaging
 
 ## Requirements
 
-Development requires Node.js and npm. Native installers should be packaged on their target operating system: Windows for the NSIS installer and macOS for the DMG image.
+Development requires Node.js 22.12 or newer, npm, Rust, and the [Tauri system prerequisites](https://v2.tauri.app/start/prerequisites/). Native installers should be packaged on their target operating system: Windows for the NSIS installer and macOS for the DMG image.
 
 ## Install dependencies
 
@@ -49,7 +49,7 @@ npm install
 npm run dev
 ```
 
-This starts Vite and then opens the Electron application.
+This starts Vite and opens the application in its Tauri window.
 
 To run only the renderer in a browser:
 
@@ -77,7 +77,7 @@ Create a universal macOS installer for Apple Silicon and Intel Macs:
 npm run dist:mac
 ```
 
-The macOS command must be run on macOS. Packaged artifacts are written to `release/`.
+The macOS command must be run on macOS. Packaged artifacts are written to `release/`. The Windows installer uses the WebView2 runtime already included with current Windows versions instead of bundling a separate copy of Chromium.
 
 ## GitHub releases
 
@@ -96,11 +96,11 @@ npm run release:patch
 
 In the Codex app, the same workflow is available as the `Publish New Version` project environment action. It runs lint and build checks, commits current changes when needed, then moves the `Unreleased` changelog entries into the new version, creates the version commit and tag, and pushes everything to GitHub.
 
-Installers are unsigned unless signing secrets are configured in the GitHub repository. For macOS distribution without Gatekeeper warnings, add `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`. Windows signing can use `WIN_CSC_LINK` and `WIN_CSC_KEY_PASSWORD`.
+Installers are unsigned unless signing credentials are configured in the GitHub repository. For macOS distribution without Gatekeeper warnings, add `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`. Windows signing requires a certificate configured for Tauri Bundler.
 
 ## Local data
 
-Electron stores CopyBoard data under its `userData` directory. On a standard Windows installation, the files are located under `%APPDATA%/CopyBoard/`:
+Tauri stores CopyBoard data in the operating system's application-data directory. On a standard Windows installation, the files are located under `%APPDATA%/com.copyboard.desktop/`:
 
 - `settings.json` — application preferences
 - `clipboard-history.json` — history metadata
@@ -108,6 +108,8 @@ Electron stores CopyBoard data under its `userData` directory. On a standard Win
 - `frequent-items.json` — favorites
 
 These runtime files are not part of the repository.
+
+On first launch after upgrading from the Electron version, CopyBoard copies existing settings, history, saved images, and favorites from `%APPDATA%/CopyBoard/`. The original data is left intact as a recovery copy.
 
 ## Useful commands
 

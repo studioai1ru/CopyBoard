@@ -39,11 +39,13 @@ jobs:
             script: dist:win
             artifact: windows-installer
             files: release/*.exe
+            rust-targets: x86_64-pc-windows-msvc
           - label: macOS
             os: macos-latest
             script: dist:mac
             artifact: macos-installer
             files: release/*.dmg
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -55,6 +57,16 @@ jobs:
         with:
           node-version: 22
           cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
 
       - name: Install dependencies
         shell: bash
@@ -77,31 +89,22 @@ jobs:
       - name: Run lint checks
         run: npm run lint
 
-      - name: Configure optional code signing
+      - name: Configure optional macOS signing
+        if: matrix.label == 'macOS'
         shell: bash
         env:
-          BUILD_PLATFORM: ${{ matrix.label }}
           MAC_CERTIFICATE: ${{ secrets.MAC_CSC_LINK }}
           MAC_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
           MAC_APPLE_ID: ${{ secrets.APPLE_ID }}
           MAC_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           MAC_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          WINDOWS_CERTIFICATE: ${{ secrets.WIN_CSC_LINK }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: |
-          if [[ "$BUILD_PLATFORM" == "macOS" ]]; then
-            if [[ -n "$MAC_CERTIFICATE" ]]; then
-              echo "CSC_LINK=$MAC_CERTIFICATE" >> "$GITHUB_ENV"
-              echo "CSC_KEY_PASSWORD=$MAC_CERTIFICATE_PASSWORD" >> "$GITHUB_ENV"
-              echo "APPLE_ID=$MAC_APPLE_ID" >> "$GITHUB_ENV"
-              echo "APPLE_APP_SPECIFIC_PASSWORD=$MAC_APP_PASSWORD" >> "$GITHUB_ENV"
-              echo "APPLE_TEAM_ID=$MAC_TEAM_ID" >> "$GITHUB_ENV"
-            else
-              echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
-            fi
-          elif [[ -n "$WINDOWS_CERTIFICATE" ]]; then
-            echo "WIN_CSC_LINK=$WINDOWS_CERTIFICATE" >> "$GITHUB_ENV"
-            echo "WIN_CSC_KEY_PASSWORD=$WINDOWS_CERTIFICATE_PASSWORD" >> "$GITHUB_ENV"
+          if [[ -n "$MAC_CERTIFICATE" ]]; then
+            echo "APPLE_CERTIFICATE=$MAC_CERTIFICATE" >> "$GITHUB_ENV"
+            echo "APPLE_CERTIFICATE_PASSWORD=$MAC_CERTIFICATE_PASSWORD" >> "$GITHUB_ENV"
+            echo "APPLE_ID=$MAC_APPLE_ID" >> "$GITHUB_ENV"
+            echo "APPLE_PASSWORD=$MAC_APP_PASSWORD" >> "$GITHUB_ENV"
+            echo "APPLE_TEAM_ID=$MAC_TEAM_ID" >> "$GITHUB_ENV"
           fi
 
       - name: Build installer
