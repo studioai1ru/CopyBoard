@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.12] - 2026-08-13
+
 ### Added
 
 - The templates drawer now offers the same right-click Edit and Delete actions as favorites in the main window.
