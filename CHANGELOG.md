@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Custom favorite icons now offer 32 symbols in an 8×4 grid and a ninth rainbow swatch that opens a free color picker.
+
+### Fixed
+
+- The favorite editor form is slightly taller so the icon type menu fits without looking clipped.
+
 ## [1.0.18] - 2026-08-14
 
 ### Fixed

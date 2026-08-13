@@ -100,7 +100,8 @@ $modal-titlebar-offset: 28px;
     grid-template-rows: auto minmax(0, 1fr);
 
     textarea {
-      min-height: 6rem;
+      // Tall enough for the upward icon picker (~7 options) to fit above the actions.
+      min-height: 10rem;
       height: 100%;
       max-height: none;
       resize: none;
@@ -398,13 +399,13 @@ $modal-titlebar-offset: 28px;
 
   &__symbols {
     display: grid;
-    grid-template-columns: repeat(4, 40px);
+    grid-template-columns: repeat(8, minmax(0, 1fr));
     gap: 6px;
 
     button {
       display: grid;
-      width: 40px;
-      height: 40px;
+      width: 100%;
+      aspect-ratio: 1;
       place-items: center;
       border: 1px solid var(--border-primary);
       border-radius: var(--radius-sm);
@@ -425,21 +426,23 @@ $modal-titlebar-offset: 28px;
       }
 
       svg {
-        width: 18px;
-        height: 18px;
+        width: 16px;
+        height: 16px;
       }
     }
   }
 
   &__colors {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+    gap: 6px;
+    align-items: center;
 
     button {
       display: grid;
-      width: 32px;
-      height: 32px;
+      width: 100%;
+      aspect-ratio: 1;
       place-items: center;
       border: 3px solid var(--bg-secondary);
       border-radius: 999px;
@@ -458,6 +461,39 @@ $modal-titlebar-offset: 28px;
         stroke-width: 3;
       }
     }
+  }
+
+  &__color-custom {
+    background:
+      conic-gradient(
+        from 0deg,
+        #ef4444,
+        #f59e0b,
+        #eab308,
+        #22c55e,
+        #06b6d4,
+        #3b82f6,
+        #8b5cf6,
+        #ec4899,
+        #ef4444
+      );
+
+    &.is-active {
+      background: var(--custom-icon-color);
+      color: var(--custom-icon-fg);
+    }
+  }
+
+  &__color-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
   }
 
   &__actions {
