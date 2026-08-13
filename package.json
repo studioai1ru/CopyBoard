@@ -1,7 +1,7 @@
 {
   "name": "copyboard",
   "private": true,
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Personal clipboard manager for Windows and macOS",
   "type": "module",
   "engines": {

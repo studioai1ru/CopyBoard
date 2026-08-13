@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.14] - 2026-08-13
+
 ### Added
 
 - The drawer can now be dragged horizontally by its handle and remembers its position along the top of the screen.
