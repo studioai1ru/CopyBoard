@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.20] - 2026-08-15
+
 ### Fixed
 
 - Clipboard history and favorites now load reliably on a cold system startup, and adding a favorite can no longer overwrite previously saved favorites when the interface is still synchronizing.
