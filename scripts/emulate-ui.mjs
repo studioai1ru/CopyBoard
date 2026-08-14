@@ -149,6 +149,7 @@ const mockSource = String.raw`
     history: [],
     favorites: [initialFavorite],
     calls: [],
+    runtimeReadyFailures: 3,
     resolvedTheme: 'light',
     edgeVisible: true,
     editorItem: null
@@ -199,6 +200,12 @@ const mockSource = String.raw`
         return null;
       }
       switch (command) {
+        case 'runtime_ready':
+          if (state.runtimeReadyFailures > 0) {
+            state.runtimeReadyFailures -= 1;
+            throw new Error('Native state is not managed yet');
+          }
+          return true;
         case 'window_ready':
         case 'window_hide':
         case 'window_show':
@@ -242,6 +249,12 @@ const mockSource = String.raw`
           queueMicrotask(() => emit('copyboard:history.changed', null));
           return true;
         case 'favorites_load':
+          return copy(state.favorites);
+        case 'favorites_add':
+          if (!state.favorites.some((item) => item.content === args.item.content)) {
+            state.favorites = [copy(args.item), ...state.favorites];
+            queueMicrotask(() => emit('copyboard:favorites.changed', state.favorites));
+          }
           return copy(state.favorites);
         case 'favorites_save':
           state.favorites = copy(args.items || []);
@@ -639,7 +652,7 @@ async function drawerScenario(cdp, baseUrl, artifactDir) {
         && bounds.top >= modal.top && bounds.bottom <= modal.bottom
     };
   })()`);
-  assert(customIconForm.symbols === 16 && customIconForm.colors === 8 && customIconForm.insideModal,
+  assert(customIconForm.symbols === 32 && customIconForm.colors === 9 && customIconForm.insideModal,
     `Custom icon form is incomplete or clipped: ${JSON.stringify(customIconForm)}`);
   const customIconPath = path.join(artifactDir, 'custom-icon-editor.png');
   await screenshot(cdp, customIconPath);

@@ -97,7 +97,7 @@ function App() {
     deleteItem,
     copyToClipboard,
     handleSaveEdit,
-  } = useClipboardHistory({ maxItems, autoDelete });
+  } = useClipboardHistory({ maxItems, autoDelete, settingsLoaded });
 
   const {
     items: frequentItems,

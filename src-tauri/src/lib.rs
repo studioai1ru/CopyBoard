@@ -1006,6 +1006,11 @@ fn sync_autostart<R: Runtime>(app: &AppHandle<R>, enabled: bool) -> bool {
 }
 
 #[tauri::command]
+fn runtime_ready(_state: State<'_, RuntimeState>) -> bool {
+    true
+}
+
+#[tauri::command]
 fn window_ready(window: WebviewWindow, state: State<'_, RuntimeState>) -> bool {
     if state.initial_hidden.swap(false, Ordering::SeqCst) {
         return false;
@@ -1652,6 +1657,37 @@ fn favorites_load(state: State<'_, RuntimeState>) -> Vec<Value> {
 }
 
 #[tauri::command]
+fn favorites_add(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    item: Value,
+) -> Result<Vec<Value>, String> {
+    let content = item
+        .get("content")
+        .and_then(Value::as_str)
+        .filter(|content| !content.is_empty())
+        .ok_or_else(|| "Favorite content is required".to_string())?;
+    let _guard = state
+        .favorites_io
+        .lock()
+        .map_err(|error| error.to_string())?;
+    let mut items = load_json(&favorites_path(&state), json!([]))
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    if !items
+        .iter()
+        .any(|row| row.get("content").and_then(Value::as_str) == Some(content))
+    {
+        items.insert(0, item);
+        save_json(&favorites_path(&state), &Value::Array(items.clone()))?;
+        rebuild_tray(&app)?;
+        let _ = app.emit("copyboard:favorites.changed", items.clone());
+    }
+    Ok(items)
+}
+
+#[tauri::command]
 fn favorites_save(
     app: AppHandle,
     state: State<'_, RuntimeState>,
@@ -1786,6 +1822,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            runtime_ready,
             window_ready,
             window_minimize,
             window_toggle_maximize,
@@ -1827,6 +1864,7 @@ pub fn run() {
             history_save,
             history_clear,
             favorites_load,
+            favorites_add,
             favorites_save,
             favorites_update,
             favorites_delete

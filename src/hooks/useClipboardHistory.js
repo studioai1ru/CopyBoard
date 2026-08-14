@@ -13,7 +13,7 @@ import { parseFileReferences } from '../utils/fileReferences';
  * Clipboard history store for the renderer.
  * Native monitoring persists captures; this hook keeps the visible list in sync.
  */
-export function useClipboardHistory({ maxItems, autoDelete }) {
+export function useClipboardHistory({ maxItems, autoDelete, settingsLoaded = true }) {
   const [loading, setLoading] = useState(true);
   const [clipboardHistory, setClipboardHistory] = useState([]);
 
@@ -144,6 +144,7 @@ export function useClipboardHistory({ maxItems, autoDelete }) {
   }, [persistItems]);
 
   useEffect(() => {
+    if (!settingsLoaded) return undefined;
     let alive = true;
 
     (async () => {
@@ -181,9 +182,9 @@ export function useClipboardHistory({ maxItems, autoDelete }) {
     return () => {
       alive = false;
     };
-    // Intentionally once on mount — retention rules re-applied below.
+    // Load once after settings are ready — retention rules are re-applied below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [settingsLoaded]);
 
   useEffect(() => {
     if (!readyRef.current) return;

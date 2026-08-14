@@ -22,12 +22,12 @@ export function useFrequentItems() {
       const data = api?.favorites?.load ? await api.favorites.load() : [];
       const nextItems = Array.isArray(data) ? data : [];
       setItems(nextItems);
-      return nextItems;
-    } catch {
-      setItems([]);
-      return [];
-    } finally {
       setLoaded(true);
+      return nextItems;
+    } catch (error) {
+      console.error('Favorites load failed:', error);
+      setLoaded(false);
+      return null;
     }
   }, []);
 
@@ -55,17 +55,23 @@ export function useFrequentItems() {
     if (!trimmed) return false;
     if (items.some((row) => favoriteContentKey(row.content) === trimmed)) return false;
 
-    await persist([
-      {
-        id: createEntryId(),
-        label: favoriteLabel(label, trimmed),
-        content: trimmed,
-        icon: normalizeFavoriteIcon(icon, trimmed),
-        displayMode: normalizeFavoriteDisplayMode(displayMode),
-        createdAt: new Date().toISOString(),
-      },
-      ...items,
-    ]);
+    const item = {
+      id: createEntryId(),
+      label: favoriteLabel(label, trimmed),
+      content: trimmed,
+      icon: normalizeFavoriteIcon(icon, trimmed),
+      displayMode: normalizeFavoriteDisplayMode(displayMode),
+      createdAt: new Date().toISOString(),
+    };
+    const api = desktop();
+    if (api?.favorites?.add) {
+      const saved = await api.favorites.add(item);
+      const nextItems = Array.isArray(saved) ? saved : [];
+      setItems(nextItems);
+      setLoaded(true);
+      return nextItems.some((row) => row.id === item.id);
+    }
+    await persist([item, ...items]);
     return true;
   }, [items, persist]);
 
