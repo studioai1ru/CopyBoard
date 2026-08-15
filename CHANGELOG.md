@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.21] - 2026-08-15
+
 ### Added
 
 - The window title bar now shows the current product version next to the app name.
