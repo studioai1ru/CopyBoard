@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FiCopy, FiMinus, FiSquare, FiX } from 'react-icons/fi';
+import { APP_VERSION } from '../utils/appVersion';
 import { useLanguage } from '../utils/i18n';
 import { desktop, isDesktop } from '../utils/desktop';
 import '../scss/TitleBar.scss';
@@ -22,7 +23,7 @@ const TitleBar = () => {
     <div className="window-chrome" data-tauri-drag-region>
       <div className="window-chrome__identity" data-tauri-drag-region>
         <img src="./images/CopyBoard_Logo.png" alt="" aria-hidden="true" />
-        <span>{t('app.title')}</span>
+        <span>{t('titleBar.version', { version: APP_VERSION })}</span>
       </div>
 
       {(controlsAvailable || isDesktop()) && (

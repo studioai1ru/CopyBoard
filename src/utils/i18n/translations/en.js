@@ -243,11 +243,8 @@ export const en = {
     },
   },
 
-  footer: {
-    version: 'CopyBoard · v{{version}}',
-  },
-
   titleBar: {
+    version: 'CopyBoard · v{{version}}',
     minimize: 'Minimize',
     maximize: 'Maximize',
     restore: 'Restore',

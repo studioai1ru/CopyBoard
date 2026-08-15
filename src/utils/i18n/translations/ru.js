@@ -243,11 +243,8 @@ export const ru = {
     },
   },
 
-  footer: {
-    version: 'CopyBoard · v{{version}}',
-  },
-
   titleBar: {
+    version: 'CopyBoard · v{{version}}',
     minimize: 'Свернуть',
     maximize: 'Развернуть',
     restore: 'Восстановить',
