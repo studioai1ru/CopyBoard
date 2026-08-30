@@ -16,7 +16,7 @@ use std::{
     io::Cursor,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering},
         mpsc, Arc, Mutex,
     },
     thread,
@@ -45,6 +45,8 @@ const QUICK_ACCESS_DEFAULT_WIDTH: u64 = 278;
 const QUICK_ACCESS_DEFAULT_HEIGHT: u64 = 64;
 const QUICK_ACCESS_HIT_AREA_HEIGHT: f64 = 20.0;
 const QUICK_ACCESS_POSITION_SCALE: u64 = 1_000_000;
+const QUICK_ACCESS_CURSOR_OFFSET: f64 = 12.0;
+const DEFAULT_DRAWER_HOTKEY: &str = "Ctrl+Backquote";
 
 struct ClipboardRuntime {
     last_capture_key: Arc<Mutex<String>>,
@@ -76,6 +78,9 @@ struct RuntimeState {
     quick_access_ready: AtomicBool,
     quick_access_enabled: AtomicBool,
     quick_access_edge_visible: AtomicBool,
+    quick_access_at_cursor: AtomicBool,
+    quick_access_cursor_x: AtomicI64,
+    quick_access_cursor_y: AtomicI64,
     quick_access_editor_item: Mutex<Option<String>>,
 }
 
@@ -83,6 +88,7 @@ struct RuntimeState {
 #[serde(rename_all = "camelCase")]
 struct HotkeysInput {
     quick_access: Option<String>,
+    drawer: Option<String>,
     clear_all: Option<String>,
 }
 
@@ -90,6 +96,7 @@ struct HotkeysInput {
 #[serde(rename_all = "camelCase")]
 struct HotkeysSnapshot {
     quick_access: String,
+    drawer: String,
     clear_all: String,
 }
 
@@ -121,6 +128,7 @@ fn defaults() -> Value {
         "showQuickAccessEdge": true,
         "quickAccessPosition": 0.5,
         "quickAccessHotkey": "Ctrl+Shift+V",
+        "drawerHotkey": DEFAULT_DRAWER_HOTKEY,
         "clearAllHotkey": "Ctrl+Shift+Delete",
         "viewMode": "grid",
         "theme": "system",
@@ -207,6 +215,40 @@ fn store_quick_access_position(state: &RuntimeState, position: f64) {
         (position.clamp(0.0, 1.0) * QUICK_ACCESS_POSITION_SCALE as f64).round() as u64,
         Ordering::SeqCst,
     );
+}
+
+fn store_quick_access_cursor(state: &RuntimeState, x: f64, y: f64) {
+    state
+        .quick_access_cursor_x
+        .store(x.round() as i64, Ordering::SeqCst);
+    state
+        .quick_access_cursor_y
+        .store(y.round() as i64, Ordering::SeqCst);
+}
+
+fn quick_access_cursor_anchor(state: &RuntimeState) -> (f64, f64) {
+    (
+        state.quick_access_cursor_x.load(Ordering::SeqCst) as f64,
+        state.quick_access_cursor_y.load(Ordering::SeqCst) as f64,
+    )
+}
+
+fn reset_quick_access_cursor_mode(state: &RuntimeState) {
+    state.quick_access_at_cursor.store(false, Ordering::SeqCst);
+}
+
+fn restore_quick_access_edge_position<R: Runtime>(
+    app: &AppHandle<R>,
+    state: &RuntimeState,
+) {
+    reset_quick_access_cursor_mode(state);
+    let Some(window) = app.get_webview_window(QUICK_ACCESS_LABEL) else {
+        return;
+    };
+    if let Ok((x, _, closed_y, width, height)) = quick_access_geometry(&window, state) {
+        let _ = window.set_size(Size::Physical(PhysicalSize::new(width, height)));
+        let _ = window.set_position(Position::Physical(PhysicalPosition::new(x, closed_y)));
+    }
 }
 
 fn load_settings_file(data_dir: &Path) -> Value {
@@ -742,6 +784,18 @@ fn reveal_window<R: Runtime>(app: &AppHandle<R>, focus_search: bool) {
     }
 }
 
+fn reveal_drawer_near_cursor<R: Runtime>(app: &AppHandle<R>) {
+    let state = app.state::<RuntimeState>();
+    if !state.quick_access_enabled.load(Ordering::SeqCst) {
+        return;
+    }
+    if let Ok(cursor) = app.cursor_position() {
+        store_quick_access_cursor(&state, cursor.x, cursor.y);
+        state.quick_access_at_cursor.store(true, Ordering::SeqCst);
+    }
+    let _ = app.emit("copyboard:quickAccess.openRequested", ());
+}
+
 fn reveal_near_cursor<R: Runtime>(app: &AppHandle<R>) {
     let Some(window) = app.get_webview_window("main") else {
         return;
@@ -980,17 +1034,41 @@ fn register_shortcuts<R: Runtime>(app: &AppHandle<R>, settings: &Value) -> bool 
         "clearAllHotkey",
         "Ctrl+Shift+Delete",
     ));
-    let reveal_result = manager.on_shortcut(reveal.as_str(), |app, _shortcut, event| {
-        if event.state() == ShortcutState::Pressed {
-            reveal_near_cursor(app);
-        }
-    });
-    let wipe_result = manager.on_shortcut(wipe.as_str(), |app, _shortcut, event| {
-        if event.state() == ShortcutState::Pressed {
-            let _ = app.emit("copyboard:history.wipeShortcut", ());
-        }
-    });
-    reveal_result.is_ok() && wipe_result.is_ok()
+    let drawer = setting_string(
+        settings,
+        "drawerHotkey",
+        DEFAULT_DRAWER_HOTKEY,
+    );
+
+    let mut ok = true;
+    if !reveal.is_empty() {
+        ok &= manager
+            .on_shortcut(reveal.as_str(), |app, _shortcut, event| {
+                if event.state() == ShortcutState::Pressed {
+                    reveal_near_cursor(app);
+                }
+            })
+            .is_ok();
+    }
+    if !drawer.is_empty() {
+        ok &= manager
+            .on_shortcut(drawer.as_str(), |app, _shortcut, event| {
+                if event.state() == ShortcutState::Pressed {
+                    reveal_drawer_near_cursor(app);
+                }
+            })
+            .is_ok();
+    }
+    if !wipe.is_empty() {
+        ok &= manager
+            .on_shortcut(wipe.as_str(), |app, _shortcut, event| {
+                if event.state() == ShortcutState::Pressed {
+                    let _ = app.emit("copyboard:history.wipeShortcut", ());
+                }
+            })
+            .is_ok();
+    }
+    ok
 }
 
 fn sync_autostart<R: Runtime>(app: &AppHandle<R>, enabled: bool) -> bool {
@@ -1069,10 +1147,49 @@ fn window_hide(window: WebviewWindow) -> Result<(), String> {
     window.hide().map_err(|error| error.to_string())
 }
 
+fn quick_access_cursor_geometry(
+    app: &AppHandle,
+    state: &RuntimeState,
+) -> Result<(i32, i32, i32, u32, u32), String> {
+    let (cursor_x, cursor_y) = quick_access_cursor_anchor(state);
+    let monitor = app
+        .monitor_from_point(cursor_x, cursor_y)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "Cursor monitor is unavailable".to_string())?;
+    let scale = monitor.scale_factor();
+    let logical_width = state.quick_access_width.load(Ordering::SeqCst) as f64;
+    let logical_height = state.quick_access_height.load(Ordering::SeqCst) as f64;
+    let width = (logical_width * scale).round().max(1.0) as u32;
+    let height = (logical_height * scale).round().max(1.0) as u32;
+    let offset = (QUICK_ACCESS_CURSOR_OFFSET * scale).round() as i32;
+    let slide = (8.0 * scale).round() as i32;
+    let monitor_position = monitor.position();
+    let monitor_size = monitor.size();
+    let min_x = monitor_position.x;
+    let min_y = monitor_position.y;
+    let max_x = min_x + monitor_size.width.saturating_sub(width) as i32;
+    let max_y = min_y + monitor_size.height.saturating_sub(height) as i32;
+    let x = (cursor_x - width as f64 / 2.0)
+        .round()
+        .clamp(min_x as f64, max_x.max(min_x) as f64) as i32;
+    let below_y = cursor_y.round() as i32 + offset;
+    let above_y = cursor_y.round() as i32 - height as i32 - offset;
+    let open_y = if below_y <= max_y {
+        below_y.clamp(min_y, max_y)
+    } else {
+        above_y.clamp(min_y, max_y)
+    };
+    let closed_y = (open_y - slide).max(min_y);
+    Ok((x, open_y, closed_y, width, height))
+}
+
 fn quick_access_geometry(
     window: &WebviewWindow,
     state: &RuntimeState,
 ) -> Result<(i32, i32, i32, u32, u32), String> {
+    if state.quick_access_at_cursor.load(Ordering::SeqCst) {
+        return quick_access_cursor_geometry(window.app_handle(), state);
+    }
     let monitor = match window
         .primary_monitor()
         .map_err(|error| error.to_string())?
@@ -1133,6 +1250,7 @@ fn apply_quick_access_state(app: &AppHandle, state: &RuntimeState) {
     if !enabled {
         state.quick_access_open.store(false, Ordering::SeqCst);
         state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
+        reset_quick_access_cursor_mode(state);
         let _ = window.hide();
         return;
     }
@@ -1183,6 +1301,12 @@ fn quick_access_configure(
     let open = state.quick_access_open.load(Ordering::SeqCst);
     position_quick_access(&window, &state, open)?;
     Ok(true)
+}
+
+#[tauri::command]
+fn quick_access_use_edge_anchor(state: State<'_, RuntimeState>) -> bool {
+    reset_quick_access_cursor_mode(&state);
+    true
 }
 
 #[tauri::command]
@@ -1287,6 +1411,7 @@ fn quick_access_move_horizontal(
     if !delta_x.is_finite() {
         return Ok(false);
     }
+    let at_cursor = state.quick_access_at_cursor.load(Ordering::SeqCst);
     let window = app
         .get_webview_window(QUICK_ACCESS_LABEL)
         .ok_or_else(|| "Quick access window is unavailable".to_string())?;
@@ -1311,6 +1436,10 @@ fn quick_access_move_horizontal(
         .set_position(Position::Physical(PhysicalPosition::new(next_x, current.y)))
         .map_err(|error| error.to_string())?;
 
+    if at_cursor {
+        return Ok(true);
+    }
+
     let available_width = monitor_size.width.saturating_sub(window_size.width);
     let position = if available_width == 0 {
         0.5
@@ -1323,6 +1452,9 @@ fn quick_access_move_horizontal(
 
 #[tauri::command]
 fn quick_access_commit_position(state: State<'_, RuntimeState>) -> Result<bool, String> {
+    if state.quick_access_at_cursor.load(Ordering::SeqCst) {
+        return Ok(true);
+    }
     save_setting(
         &state,
         "quickAccessPosition",
@@ -1354,11 +1486,16 @@ fn quick_access_set_open(
     let target_y = if open { open_y } else { closed_y };
     let generation = state.quick_access_animation.fetch_add(1, Ordering::SeqCst) + 1;
     let animation = Arc::clone(&state.quick_access_animation);
+    let at_cursor = state.quick_access_at_cursor.load(Ordering::SeqCst);
+    let should_restore_edge = !open && at_cursor;
 
     if reduce_motion.unwrap_or(false) {
         window
             .set_position(Position::Physical(PhysicalPosition::new(x, target_y)))
             .map_err(|error| error.to_string())?;
+        if should_restore_edge {
+            restore_quick_access_edge_position(&app, &state);
+        }
         return Ok(true);
     }
 
@@ -1368,6 +1505,7 @@ fn quick_access_set_open(
         .unwrap_or(if open { closed_y } else { open_y });
     let steps = if open { 24 } else { 21 };
     let frame_ms = 16;
+    let restore_app = app.clone();
     thread::spawn(move || {
         for step in 1..=steps {
             if animation.load(Ordering::SeqCst) != generation {
@@ -1390,6 +1528,10 @@ fn quick_access_set_open(
                 return;
             }
             thread::sleep(Duration::from_millis(frame_ms));
+        }
+        if should_restore_edge {
+            let state = restore_app.state::<RuntimeState>();
+            restore_quick_access_edge_position(&restore_app, &state);
         }
     });
 
@@ -1589,6 +1731,9 @@ fn settings_set_hotkeys(
     if let Some(shortcut) = hotkeys.quick_access {
         partial.insert("quickAccessHotkey".into(), Value::String(shortcut));
     }
+    if let Some(shortcut) = hotkeys.drawer {
+        partial.insert("drawerHotkey".into(), Value::String(shortcut));
+    }
     if let Some(shortcut) = hotkeys.clear_all {
         partial.insert("clearAllHotkey".into(), Value::String(shortcut));
     }
@@ -1604,6 +1749,10 @@ fn settings_get_hotkeys(state: State<'_, RuntimeState>) -> HotkeysSnapshot {
             .as_deref()
             .map(|value| setting_string(value, "quickAccessHotkey", "Ctrl+Shift+V"))
             .unwrap_or_else(|| "Ctrl+Shift+V".into()),
+        drawer: settings
+            .as_deref()
+            .map(|value| setting_string(value, "drawerHotkey", DEFAULT_DRAWER_HOTKEY))
+            .unwrap_or_else(|| DEFAULT_DRAWER_HOTKEY.into()),
         clear_all: settings
             .as_deref()
             .map(|value| setting_string(value, "clearAllHotkey", "Ctrl+Shift+Delete"))
@@ -1803,6 +1952,9 @@ pub fn run() {
                     "showQuickAccessEdge",
                     true,
                 )),
+                quick_access_at_cursor: AtomicBool::new(false),
+                quick_access_cursor_x: AtomicI64::new(0),
+                quick_access_cursor_y: AtomicI64::new(0),
                 quick_access_editor_item: Mutex::new(None),
             };
             app.manage(state);
@@ -1832,6 +1984,7 @@ pub fn run() {
             window_hide,
             quick_access_ready,
             quick_access_configure,
+            quick_access_use_edge_anchor,
             quick_access_set_edge_visible,
             quick_access_get_edge_visible,
             quick_access_set_enabled,

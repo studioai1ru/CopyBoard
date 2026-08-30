@@ -225,8 +225,10 @@ export const en = {
 
     shortcuts: {
       quickAccess: 'Open CopyBoard',
+      drawer: 'Templates drawer at cursor',
       clearAll: 'Clear history',
       pressKeys: 'Press shortcut…',
+      taken: 'Already taken',
       cancel: 'Cancel',
     },
 

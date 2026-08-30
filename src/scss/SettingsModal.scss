@@ -94,6 +94,33 @@
   background: var(--bg-secondary);
 }
 
+.shortcut-field {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 0.8rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shortcut-field.is-recording {
+  border-color: var(--accent-color);
+  color: var(--text-muted);
+}
+
+.shortcut-field.is-taken {
+  border-color: var(--danger, #c44);
+  color: var(--danger, #c44);
+}
+
+.preference-field--shortcut + .preference-field--shortcut {
+  margin-top: 0.65rem;
+}
+
 .preference-choice {
   min-width: 0;
   border: 0;

@@ -225,8 +225,10 @@ export const ru = {
 
     shortcuts: {
       quickAccess: 'Открыть CopyBoard',
+      drawer: 'Шторка шаблонов у курсора',
       clearAll: 'Очистить историю',
       pressKeys: 'Нажмите сочетание…',
+      taken: 'Уже занято',
       cancel: 'Отмена',
     },
 

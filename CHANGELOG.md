@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- The templates drawer can now be opened at the cursor with **Ctrl+`** (`ё` on Russian keyboards). The shortcut is configurable in Settings.
+- Shortcut fields briefly show “Already taken” and clear the value when the chosen combination is already used by another CopyBoard hotkey.
+
 ## [1.0.21] - 2026-08-15
 
 ### Added

@@ -237,7 +237,11 @@ const mockSource = String.raw`
         case 'settings_get_auto_start_status':
           return { openAtLogin: false, openAsHidden: false };
         case 'settings_get_hotkeys':
-          return { quickAccess: 'Ctrl+Shift+V', clearAll: 'Ctrl+Shift+Delete' };
+          return {
+            quickAccess: 'Ctrl+Shift+V',
+            drawer: 'Ctrl+Backquote',
+            clearAll: 'Ctrl+Shift+Delete',
+          };
         case 'history_load':
           return copy(state.history);
         case 'history_save':

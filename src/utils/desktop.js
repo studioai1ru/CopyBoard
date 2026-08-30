@@ -124,6 +124,7 @@ const api = {
     onChanged: (callback) => subscribe('copyboard:favorites.changed', callback),
   },
   quickAccess: {
+    useEdgeAnchor: () => invokeNative('quick_access_use_edge_anchor'),
     ready: (size) => invokeNative('quick_access_ready', size),
     configure: (size) => invokeNative('quick_access_configure', size),
     setEnabled: (enabled) => invokeNative('quick_access_set_enabled', { enabled }),

@@ -127,7 +127,7 @@ function QuickAccessDrawer({ edgeVisible }) {
     }
   }, [moveDrawer]);
 
-  const requestOpen = useCallback(async () => {
+  const openDrawer = useCallback(async () => {
     keepDrawerOpen();
     if (openingRef.current) return;
     openingRef.current = true;
@@ -141,9 +141,14 @@ function QuickAccessDrawer({ edgeVisible }) {
     }
   }, [keepDrawerOpen, measureAndConfigure, moveDrawer, refreshItems]);
 
+  const requestOpenFromEdge = useCallback(async () => {
+    await desktop()?.quickAccess?.useEdgeAnchor?.();
+    await openDrawer();
+  }, [openDrawer]);
+
   useEffect(() => {
     document.body.classList.add('quick-access-surface');
-    const offRequest = desktop()?.quickAccess?.onOpenRequested?.(requestOpen);
+    const offRequest = desktop()?.quickAccess?.onOpenRequested?.(openDrawer);
     return () => {
       document.body.classList.remove('quick-access-surface');
       offRequest?.();
@@ -151,7 +156,7 @@ function QuickAccessDrawer({ edgeVisible }) {
       window.clearTimeout(feedbackTimerRef.current);
       if (dragFrameRef.current !== null) cancelAnimationFrame(dragFrameRef.current);
     };
-  }, [requestOpen]);
+  }, [openDrawer]);
 
   useLayoutEffect(() => {
     if (!loaded) return undefined;
@@ -322,7 +327,7 @@ function QuickAccessDrawer({ edgeVisible }) {
         ref={panelRef}
         className={`quick-drawer ${edgeVisible ? '' : 'quick-drawer--edge-hidden'}`.trim()}
         aria-label={t('quickAccess.title')}
-        onPointerEnter={requestOpen}
+        onPointerEnter={requestOpenFromEdge}
         onPointerMove={keepDrawerOpen}
         onPointerLeave={closeSoon}
       >

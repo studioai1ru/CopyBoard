@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { desktop } from '../utils/desktop';
 import {
+  DEFAULT_DRAWER_HOTKEY,
   DEFAULT_QUICK_ACCESS_EDGE_VISIBLE,
   DEFAULT_QUICK_ACCESS_ENABLED,
   normalizeQuickAccessEdgeVisible,
@@ -17,6 +18,7 @@ const DEFAULTS = {
   quickAccessEnabled: DEFAULT_QUICK_ACCESS_ENABLED,
   showQuickAccessEdge: DEFAULT_QUICK_ACCESS_EDGE_VISIBLE,
   quickAccessHotkey: 'Ctrl+Shift+V',
+  drawerHotkey: DEFAULT_DRAWER_HOTKEY,
   clearAllHotkey: 'Ctrl+Shift+Delete',
   maxItems: 100,
   autoDelete: 'never',
@@ -46,6 +48,7 @@ export function useSettings({ theme, handleThemeChange, availableThemes = THEMES
     DEFAULT_QUICK_ACCESS_EDGE_VISIBLE,
   );
   const [quickAccessHotkey, setQuickAccessHotkey] = useState('Ctrl+Shift+V');
+  const [drawerHotkey, setDrawerHotkey] = useState(DEFAULT_DRAWER_HOTKEY);
   const [clearAllHotkey, setClearAllHotkey] = useState('Ctrl+Shift+Delete');
   const [maxItems, setMaxItems] = useState(100);
   const [autoDelete, setAutoDelete] = useState('never');
@@ -94,6 +97,8 @@ export function useSettings({ theme, handleThemeChange, availableThemes = THEMES
         setQuickAccessEnabled(normalizeQuickAccessEnabled(settings.quickAccessEnabled));
         setShowQuickAccessEdge(normalizeQuickAccessEdgeVisible(settings.showQuickAccessEdge));
         if (settings.quickAccessHotkey) setQuickAccessHotkey(settings.quickAccessHotkey);
+        if (settings.drawerHotkey) setDrawerHotkey(settings.drawerHotkey);
+        else setDrawerHotkey(DEFAULT_DRAWER_HOTKEY);
         if (settings.clearAllHotkey) setClearAllHotkey(settings.clearAllHotkey);
         if (settings.maxItems !== undefined) setMaxItems(Number(settings.maxItems) || 100);
         if (settings.autoDelete) setAutoDelete(settings.autoDelete);
@@ -138,6 +143,7 @@ export function useSettings({ theme, handleThemeChange, availableThemes = THEMES
       quickAccessEnabled,
       showQuickAccessEdge,
       quickAccessHotkey,
+      drawerHotkey,
       clearAllHotkey,
       maxItems,
       autoDelete,
@@ -159,6 +165,7 @@ export function useSettings({ theme, handleThemeChange, availableThemes = THEMES
     quickAccessEnabled,
     showQuickAccessEdge,
     quickAccessHotkey,
+    drawerHotkey,
     clearAllHotkey,
     maxItems,
     autoDelete,
@@ -193,9 +200,10 @@ export function useSettings({ theme, handleThemeChange, availableThemes = THEMES
     if (!loadedRef.current) return;
     desktop()?.settings?.setHotkeys?.({
       quickAccess: quickAccessHotkey,
+      drawer: drawerHotkey,
       clearAll: clearAllHotkey,
     });
-  }, [quickAccessHotkey, clearAllHotkey, settingsLoaded]);
+  }, [quickAccessHotkey, drawerHotkey, clearAllHotkey, settingsLoaded]);
 
   const resetSettings = useCallback(async () => {
     const defaults = { ...DEFAULTS };
@@ -208,6 +216,7 @@ export function useSettings({ theme, handleThemeChange, availableThemes = THEMES
     setQuickAccessEnabled(defaults.quickAccessEnabled);
     setShowQuickAccessEdge(defaults.showQuickAccessEdge);
     setQuickAccessHotkey(defaults.quickAccessHotkey);
+    setDrawerHotkey(defaults.drawerHotkey);
     setClearAllHotkey(defaults.clearAllHotkey);
     setMaxItems(defaults.maxItems);
     setAutoDelete(defaults.autoDelete);
@@ -238,6 +247,8 @@ export function useSettings({ theme, handleThemeChange, availableThemes = THEMES
     setShowQuickAccessEdge,
     quickAccessHotkey,
     setQuickAccessHotkey,
+    drawerHotkey,
+    setDrawerHotkey,
     clearAllHotkey,
     setClearAllHotkey,
     maxItems,

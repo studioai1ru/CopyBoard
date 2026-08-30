@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../utils/i18n';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { desktop } from '../utils/desktop';
+import ShortcutField from './ShortcutField';
 import '../scss/SettingsModal.scss';
 
 function SelectField({ id, label, value, onChange, children }) {
@@ -229,6 +230,42 @@ const SettingsModal = ({
                 />
               )}
             </div>
+          </section>
+
+          <section className="preference-card">
+            <h3>{t('settings.sections.shortcuts')}</h3>
+            <ShortcutField
+              id="quick-access-hotkey"
+              label={t('settings.shortcuts.quickAccess')}
+              value={current.quickAccessHotkey}
+              onChange={change.quickAccessHotkey}
+              taken={[
+                current.drawerHotkey,
+                current.clearAllHotkey,
+              ].filter(Boolean)}
+            />
+            {current.quickAccessEnabled && (
+              <ShortcutField
+                id="drawer-hotkey"
+                label={t('settings.shortcuts.drawer')}
+                value={current.drawerHotkey}
+                onChange={change.drawerHotkey}
+                taken={[
+                  current.quickAccessHotkey,
+                  current.clearAllHotkey,
+                ].filter(Boolean)}
+              />
+            )}
+            <ShortcutField
+              id="clear-all-hotkey"
+              label={t('settings.shortcuts.clearAll')}
+              value={current.clearAllHotkey}
+              onChange={change.clearAllHotkey}
+              taken={[
+                current.quickAccessHotkey,
+                current.drawerHotkey,
+              ].filter(Boolean)}
+            />
           </section>
 
           <section className="preference-card">
