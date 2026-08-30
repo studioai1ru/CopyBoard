@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.22] - 2026-08-30
+
 ### Added
 
 - The templates drawer can now be opened at the cursor with **Ctrl+`** (`ё` on Russian keyboards). The shortcut is configurable in Settings.
