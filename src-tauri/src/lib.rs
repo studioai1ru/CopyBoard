@@ -376,6 +376,117 @@ fn retention_window_ms(mode: &str) -> i64 {
     }
 }
 
+fn contains_word(haystack: &str, needle: &str) -> bool {
+    haystack
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+        .any(|word| word == needle)
+}
+
+fn classify_text_payload(body: &str) -> &'static str {
+    let sample: String = body.chars().take(4000).collect();
+    let mut score = 0;
+
+    if sample.contains("```") && sample.matches("```").count() >= 2 {
+        score += 4;
+    }
+
+    let trimmed = sample.trim();
+    if (trimmed.starts_with('{') || trimmed.starts_with('['))
+        && (trimmed.ends_with('}') || trimmed.ends_with(']'))
+    {
+        score += 3;
+    }
+
+    if sample.contains("</") || sample.contains("<div") || sample.contains("<span") {
+        score += 3;
+    }
+
+    if contains_word(&sample, "def")
+        || contains_word(&sample, "fn")
+        || contains_word(&sample, "func")
+        || contains_word(&sample, "function")
+        || contains_word(&sample, "class")
+        || contains_word(&sample, "interface")
+        || contains_word(&sample, "struct")
+        || contains_word(&sample, "enum")
+    {
+        score += 2;
+    }
+
+    if contains_word(&sample, "import")
+        || contains_word(&sample, "export")
+        || sample.contains("require(")
+        || contains_word(&sample, "include")
+        || contains_word(&sample, "using")
+        || contains_word(&sample, "package")
+    {
+        score += 2;
+    }
+
+    if contains_word(&sample, "const")
+        || contains_word(&sample, "let")
+        || contains_word(&sample, "var")
+        || contains_word(&sample, "return")
+        || contains_word(&sample, "async")
+        || contains_word(&sample, "await")
+    {
+        score += 1;
+    }
+
+    if sample.contains("#include") || sample.contains("#define") {
+        score += 2;
+    }
+
+    if sample.contains("=>") || sample.contains("::") || sample.contains("->") || sample.contains("...") {
+        score += 1;
+    }
+
+    let brace_semi_count = sample
+        .chars()
+        .filter(|ch| matches!(ch, '{' | '}' | ';'))
+        .count();
+    if brace_semi_count >= 3
+        && sample.lines().any(|line| {
+            let line = line.trim_end();
+            line.ends_with('{') || line.ends_with('}') || line.ends_with(';')
+        })
+    {
+        score += 2;
+    }
+
+    if sample.lines().count() >= 3
+        && sample
+            .lines()
+            .any(|line| line.starts_with("  ") || line.starts_with('\t'))
+    {
+        score += 1;
+    }
+
+    if sample.contains("console.")
+        || sample.contains("print(")
+        || sample.contains("printf(")
+        || sample.contains("System.out")
+        || sample.contains("fmt.")
+    {
+        score += 1;
+    }
+
+    let punct_count = sample
+        .chars()
+        .filter(|ch| matches!(ch, '{' | '}' | '(' | ')' | '[' | ']' | ';' | '=' | '<' | '>'))
+        .count();
+    let density = punct_count as f64 / sample.len().max(1) as f64;
+    if density > 0.08 && sample.len() > 40 {
+        score += 2;
+    }
+
+    if score >= 4 {
+        "code"
+    } else {
+        "text"
+    }
+}
+
 fn capture_preview(kind: &str, content: &str) -> String {
     if kind == "image" {
         return String::new();
@@ -661,7 +772,8 @@ fn capture_clipboard_change(app: &AppHandle) {
                 let key = format!("text::{text}");
                 if capture_changed(last_capture_key, &key) && text.chars().count() <= MAX_TEXT_CHARS
                 {
-                    record_and_emit_capture(app, "text", text, false);
+                    let kind = classify_text_payload(&text);
+                    record_and_emit_capture(app, kind, text, false);
                 }
                 return;
             }
@@ -976,10 +1088,11 @@ fn rebuild_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
                                 "image",
                             )
                         } else {
+                            let kind = classify_text_payload(content);
                             (
                                 write_clipboard_text(&state.clipboard, content.to_string())
                                     .unwrap_or(false),
-                                "text",
+                                kind,
                             )
                         };
                         if copied {
@@ -1183,8 +1296,8 @@ fn quick_access_cursor_geometry(
     Ok((x, open_y, closed_y, width, height))
 }
 
-fn quick_access_geometry(
-    window: &WebviewWindow,
+fn quick_access_geometry<R: Runtime>(
+    window: &WebviewWindow<R>,
     state: &RuntimeState,
 ) -> Result<(i32, i32, i32, u32, u32), String> {
     if state.quick_access_at_cursor.load(Ordering::SeqCst) {
@@ -1225,8 +1338,8 @@ fn set_quick_access_size(state: &RuntimeState, _width: f64, height: f64) {
         .store(height.round().clamp(44.0, 420.0) as u64, Ordering::SeqCst);
 }
 
-fn position_quick_access(
-    window: &WebviewWindow,
+fn position_quick_access<R: Runtime>(
+    window: &WebviewWindow<R>,
     state: &RuntimeState,
     open: bool,
 ) -> Result<(), String> {
@@ -1562,7 +1675,7 @@ fn clip_write_text(
 ) -> Result<bool, String> {
     let copied = write_clipboard_text(&state.clipboard, text.clone())?;
     if copied && record_history.unwrap_or(false) {
-        emit_forced_capture(&app, &text, "text");
+        emit_forced_capture(&app, &text, classify_text_payload(&text));
     }
     Ok(copied)
 }

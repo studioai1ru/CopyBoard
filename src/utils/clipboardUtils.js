@@ -52,8 +52,10 @@ export function classifyPayload(body, hint = null) {
   if (/```[\s\S]*```/.test(sample)) score += 4;
   if (/^\s*[{[]/.test(sample) && /[}\]]\s*$/.test(sample.trim())) score += 3;
   if (/<\/?[a-zA-Z][^>]*>/.test(sample)) score += 3;
-  if (/\b(def|fn|func|class|interface|struct|enum)\b/.test(sample)) score += 2;
+  if (/\b(def|fn|func|function|class|interface|struct|enum)\b/.test(sample)) score += 2;
   if (/\b(import|export|require|include|using|package)\b/.test(sample)) score += 2;
+  if (/\b(const|let|var|return|async|await)\b/.test(sample)) score += 1;
+  if (/#(include|define)\b/.test(sample)) score += 2;
   if (/=>|::|->|\.\.\./.test(sample)) score += 1;
   if (/[{};]\s*$/m.test(sample) && (sample.match(/[{};]/g) || []).length >= 3) score += 2;
   if (/^\s{2,}|\t/m.test(sample) && sample.split('\n').length >= 3) score += 1;
@@ -74,6 +76,23 @@ export function makePreview(body, kind) {
   const text = String(body || '');
   if (text.length <= 120) return text;
   return `${text.slice(0, 120)}…`;
+}
+
+/** Re-apply type detection to a stored history row (e.g. after native capture). */
+export function normalizeHistoryEntry(row) {
+  if (!row || typeof row !== 'object') return row;
+  const content = String(row.content ?? '');
+  const kind = classifyPayload(content, row.type);
+  if (row.type === kind) return row;
+  return {
+    ...row,
+    type: kind,
+    preview: makePreview(content, kind),
+  };
+}
+
+export function normalizeHistory(items) {
+  return (Array.isArray(items) ? items : []).map(normalizeHistoryEntry);
 }
 
 /** Normalize a clipboard capture into the history row shape used by the UI. */

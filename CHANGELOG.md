@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- Clipboard history now detects code snippets and labels them as Code instead of always showing Text.
+
 ## [1.0.22] - 2026-08-30
 
 ### Added

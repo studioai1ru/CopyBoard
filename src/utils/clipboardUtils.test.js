@@ -4,8 +4,44 @@ import {
   createHistoryEntry,
   favoriteContentKey,
   mergeHistoryEntry,
+  normalizeHistory,
+  normalizeHistoryEntry,
 } from './clipboardUtils.js';
 import { serializeFileReferences } from './fileReferences.js';
+
+test('stored text rows are reclassified as code when loaded from native history', () => {
+  const rows = normalizeHistory([
+    {
+      id: '1',
+      type: 'text',
+      content: 'function greet() {\n  console.log("hello");\n}',
+      preview: 'function greet()',
+      timestamp: '2026-08-13T10:00:00.000Z',
+    },
+  ]);
+
+  assert.equal(rows[0].type, 'code');
+});
+
+test('normalizeHistoryEntry keeps image and file rows unchanged', () => {
+  const imageRow = normalizeHistoryEntry({
+    id: 'img',
+    type: 'image',
+    content: 'data:image/png;base64,abc',
+    preview: '',
+    timestamp: '2026-08-13T10:00:00.000Z',
+  });
+  const fileRow = normalizeHistoryEntry({
+    id: 'file',
+    type: 'file',
+    content: '["C:\\\\Work\\\\report.pdf"]',
+    preview: 'report.pdf',
+    timestamp: '2026-08-13T10:00:00.000Z',
+  });
+
+  assert.equal(imageRow.type, 'image');
+  assert.equal(fileRow.type, 'file');
+});
 
 test('template capture becomes a normalized history entry', () => {
   const timestamp = '2026-08-13T10:00:00.000Z';

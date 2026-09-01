@@ -4,6 +4,7 @@ import {
   createHistoryEntry,
   makePreview,
   mergeHistoryEntry,
+  normalizeHistory,
   trimHistory,
 } from '../utils/clipboardUtils';
 import { desktop } from '../utils/desktop';
@@ -163,7 +164,7 @@ export function useClipboardHistory({ maxItems, autoDelete, settingsLoaded = tru
         }
 
         if (!alive || revision !== localRevisionRef.current) return;
-        const pruned = trimHistory(items, { maxItems, autoDelete });
+        const pruned = trimHistory(normalizeHistory(items), { maxItems, autoDelete });
         historyRef.current = pruned;
         setClipboardHistory(pruned);
         if (pruned[0]) {
@@ -205,7 +206,7 @@ export function useClipboardHistory({ maxItems, autoDelete, settingsLoaded = tru
       try {
         const stored = await api.history.load();
         if (!active || request !== syncRequestRef.current) return;
-        const next = trimHistory(stored, { maxItems, autoDelete });
+        const next = trimHistory(normalizeHistory(stored), { maxItems, autoDelete });
         if (historySignature(next) !== historySignature(historyRef.current)) {
           historyRef.current = next;
           setClipboardHistory(next);
