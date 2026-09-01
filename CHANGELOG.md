@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- Windows and macOS installer builds now complete successfully with the current desktop runtime.
+
 ## [1.0.23] - 2026-09-01
 
 ### Fixed
