@@ -19,9 +19,17 @@ import '../scss/QuickAccessDrawer.scss';
 
 const COPY_FEEDBACK_MS = 520;
 const DRAWER_CLOSE_GRACE_MS = 650;
+const LAYOUT_FALLBACK_MS = 50;
 
 const afterLayout = () => new Promise((resolve) => {
-  requestAnimationFrame(() => requestAnimationFrame(resolve));
+  let settled = false;
+  const done = () => {
+    if (settled) return;
+    settled = true;
+    resolve();
+  };
+  requestAnimationFrame(() => requestAnimationFrame(done));
+  window.setTimeout(done, LAYOUT_FALLBACK_MS);
 });
 
 function QuickAccessDrawer({ edgeVisible }) {
@@ -146,9 +154,14 @@ function QuickAccessDrawer({ edgeVisible }) {
     await openDrawer();
   }, [openDrawer]);
 
+  const syncDrawerFromHotkey = useCallback(async () => {
+    keepDrawerOpen();
+    await refreshItems();
+  }, [keepDrawerOpen, refreshItems]);
+
   useEffect(() => {
     document.body.classList.add('quick-access-surface');
-    const offRequest = desktop()?.quickAccess?.onOpenRequested?.(openDrawer);
+    const offRequest = desktop()?.quickAccess?.onOpenRequested?.(syncDrawerFromHotkey);
     return () => {
       document.body.classList.remove('quick-access-surface');
       offRequest?.();
@@ -156,7 +169,7 @@ function QuickAccessDrawer({ edgeVisible }) {
       window.clearTimeout(feedbackTimerRef.current);
       if (dragFrameRef.current !== null) cancelAnimationFrame(dragFrameRef.current);
     };
-  }, [openDrawer]);
+  }, [syncDrawerFromHotkey]);
 
   useLayoutEffect(() => {
     if (!loaded) return undefined;

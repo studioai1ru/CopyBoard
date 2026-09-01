@@ -138,8 +138,8 @@ const api = {
     setOpen: (open, reduceMotion = false) => (
       invokeNative('quick_access_set_open', { open, reduceMotion })
     ),
-    onOpenRequested: (callback) => (
-      subscribe('copyboard:quickAccess.openRequested', callback)
+    onOpenRequested: (callback, onReady) => (
+      subscribeWindow('copyboard:quickAccess.openRequested.native', callback, onReady)
     ),
     onEdgeVisibleChange: (callback, onReady) => (
       subscribeWindow('copyboard:quickAccess.edgeVisible.native', callback, onReady)

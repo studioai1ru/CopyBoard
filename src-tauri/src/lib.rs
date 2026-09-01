@@ -597,6 +597,16 @@ fn notify_quick_access_edge_visible<R: Runtime>(app: &AppHandle<R>, visible: boo
     }
 }
 
+fn notify_quick_access_open_requested<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(window) = app.get_webview_window(QUICK_ACCESS_LABEL) {
+        let script =
+            "window.dispatchEvent(new CustomEvent('copyboard:quickAccess.openRequested.native'));";
+        if let Err(error) = window.eval(script) {
+            eprintln!("Failed to notify the quick access WebView: {error}");
+        }
+    }
+}
+
 fn notify_quick_access_editor_item<R: Runtime>(app: &AppHandle<R>, item: &Value) {
     let Ok(payload) = serde_json::to_string(item) else {
         return;
@@ -904,8 +914,11 @@ fn reveal_drawer_near_cursor<R: Runtime>(app: &AppHandle<R>) {
     if let Ok(cursor) = app.cursor_position() {
         store_quick_access_cursor(&state, cursor.x, cursor.y);
         state.quick_access_at_cursor.store(true, Ordering::SeqCst);
+    } else if !state.quick_access_at_cursor.load(Ordering::SeqCst) {
+        return;
     }
-    let _ = app.emit("copyboard:quickAccess.openRequested", ());
+    notify_quick_access_open_requested(app);
+    let _ = animate_quick_access(app, &state, true, None);
 }
 
 fn reveal_near_cursor<R: Runtime>(app: &AppHandle<R>) {
@@ -1374,6 +1387,9 @@ fn apply_quick_access_state(app: &AppHandle, state: &RuntimeState) {
 
     state.quick_access_animation.fetch_add(1, Ordering::SeqCst);
     let open = state.quick_access_open.load(Ordering::SeqCst);
+    if !open && state.quick_access_at_cursor.load(Ordering::SeqCst) {
+        reset_quick_access_cursor_mode(state);
+    }
     let _ = position_quick_access(&window, state, open);
     let _ = window.set_focusable(false);
     let _ = window.set_always_on_top(true);
@@ -1576,10 +1592,9 @@ fn quick_access_commit_position(state: State<'_, RuntimeState>) -> Result<bool, 
     Ok(true)
 }
 
-#[tauri::command]
-fn quick_access_set_open(
-    app: AppHandle,
-    state: State<'_, RuntimeState>,
+fn animate_quick_access<R: Runtime>(
+    app: &AppHandle<R>,
+    state: &RuntimeState,
     open: bool,
     reduce_motion: Option<bool>,
 ) -> Result<bool, String> {
@@ -1589,9 +1604,10 @@ fn quick_access_set_open(
     let window = app
         .get_webview_window(QUICK_ACCESS_LABEL)
         .ok_or_else(|| "Quick access window is unavailable".to_string())?;
+    let _ = window.set_always_on_top(true);
     let _ = window.show();
     state.quick_access_open.store(open, Ordering::SeqCst);
-    let (x, open_y, closed_y, width, height, ..) = quick_access_geometry(&window, &state)?;
+    let (x, open_y, closed_y, width, height, ..) = quick_access_geometry(&window, state)?;
     window
         .set_size(Size::Physical(PhysicalSize::new(width, height)))
         .map_err(|error| error.to_string())?;
@@ -1607,15 +1623,25 @@ fn quick_access_set_open(
             .set_position(Position::Physical(PhysicalPosition::new(x, target_y)))
             .map_err(|error| error.to_string())?;
         if should_restore_edge {
-            restore_quick_access_edge_position(&app, &state);
+            restore_quick_access_edge_position(app, state);
         }
         return Ok(true);
     }
 
-    let start_y = window
-        .outer_position()
-        .map(|position| position.y)
-        .unwrap_or(if open { closed_y } else { open_y });
+    // Opening at the cursor must start from the nearby closed slot, not from
+    // the parked top-edge window, otherwise the panel flies across the screen
+    // or stays invisible until something else repositions it.
+    let start_y = if open && at_cursor {
+        window
+            .set_position(Position::Physical(PhysicalPosition::new(x, closed_y)))
+            .map_err(|error| error.to_string())?;
+        closed_y
+    } else {
+        window
+            .outer_position()
+            .map(|position| position.y)
+            .unwrap_or(if open { closed_y } else { open_y })
+    };
     let steps = if open { 24 } else { 21 };
     let frame_ms = 16;
     let restore_app = app.clone();
@@ -1649,6 +1675,16 @@ fn quick_access_set_open(
     });
 
     Ok(true)
+}
+
+#[tauri::command]
+fn quick_access_set_open(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    open: bool,
+    reduce_motion: Option<bool>,
+) -> Result<bool, String> {
+    animate_quick_access(&app, &state, open, reduce_motion)
 }
 
 #[tauri::command]

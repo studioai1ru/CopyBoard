@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- The templates drawer shortcut now opens the panel at the cursor immediately, instead of only after another settings change.
+
 ## [1.0.24] - 2026-09-01
 
 ### Fixed
