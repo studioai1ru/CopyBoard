@@ -1260,8 +1260,8 @@ fn window_hide(window: WebviewWindow) -> Result<(), String> {
     window.hide().map_err(|error| error.to_string())
 }
 
-fn quick_access_cursor_geometry(
-    app: &AppHandle,
+fn quick_access_cursor_geometry<R: Runtime>(
+    app: &AppHandle<R>,
     state: &RuntimeState,
 ) -> Result<(i32, i32, i32, u32, u32), String> {
     let (cursor_x, cursor_y) = quick_access_cursor_anchor(state);
